@@ -30,7 +30,7 @@ npm run build
   parked in the same spot with the clearance to every wall and obstacle,
   room to open each door, whether the garage door closes, and the
   doorway width/height when driving in. Drag the car to re-park it.
-- **Search** ~115 cars (about 60 of them EVs) by make, model, year or type,
+- **Search** ~110 cars (about 60 of them EVs) by make, model, year or type,
   with each result's size against your car and whether it fits your garage.
 - **Charge ports** for EVs: shown on the drawings, and with a wall charger
   set in the garage, the cable length needed to reach the port (routed around
