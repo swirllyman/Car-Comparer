@@ -3,8 +3,10 @@ import { CarPicker } from './components/CarPicker'
 import { CompareView } from './components/CompareView'
 import { CarEditor, GarageSetup } from './components/forms'
 import { FitPanel, GarageView } from './components/GarageView'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { CentreIcon, CubeIcon, EyeIcon, FrontIcon, GarageIcon, InfoIcon, ResetIcon, SideIcon, SwapIcon, TopIcon } from './components/icons'
 import { useSize } from './components/useSize'
+import { hasWebGL, importWithReload } from './scene/support'
 import { CARS } from './data/cars'
 import { isElectric } from './data/search'
 import { allCars, findCar, useAppState } from './data/store'
@@ -15,7 +17,7 @@ import { checkFit, clearanceLevel, currentParking, DOOR_COMFORT, type Parking } 
 import { carFullName, resolveCar } from './geometry/resolve'
 import { formatDelta, formatLength, inches } from './geometry/units'
 
-const Scene3D = lazy(() => import('./scene/Scene3D'))
+const Scene3D = lazy(importWithReload(() => import('./scene/Scene3D')))
 
 type Tab = Exclude<View, 'stats'>
 
@@ -237,9 +239,20 @@ export default function App() {
               box={box}
             />
           ) : view === '3d' ? (
-            <Suspense fallback={<p className="muted center">Loading 3D…</p>}>
-              <Scene3D current={current} candidate={candidate} candidateX={cmp.candidate.frontY} />
-            </Suspense>
+            <ErrorBoundary
+              // Retry by reloading: a failed download stays failed until the page reloads.
+              fallback={() => (
+                <Unavailable3D onRetry={() => location.reload()} onTop={() => update({ view: 'top' })} reason="3D couldn’t start on this device." />
+              )}
+            >
+              {hasWebGL() ? (
+                <Suspense fallback={<p className="muted center">Loading 3D…</p>}>
+                  <Scene3D current={current} candidate={candidate} candidateX={cmp.candidate.frontY} />
+                </Suspense>
+              ) : (
+                <Unavailable3D onTop={() => update({ view: 'top' })} reason="This browser doesn’t support 3D graphics (WebGL)." />
+              )}
+            </ErrorBoundary>
           ) : (
             <CompareView current={current} candidate={candidate} cmp={cmp} view={view} units={units} box={box} />
           )}
@@ -300,6 +313,27 @@ export default function App() {
           <Notes cars={[current, candidate]} />
         </Sheet>
       )}
+    </div>
+  )
+}
+
+function Unavailable3D({ reason, onRetry, onTop }: { reason: string; onRetry?: () => void; onTop: () => void }) {
+  return (
+    <div className="unavailable">
+      <p>
+        <strong>{reason}</strong>
+      </p>
+      <p className="muted small">The Top, Side and Front views show the same sizes and work everywhere.</p>
+      <div className="sheet__actions">
+        <button className="btn btn--primary" onClick={onTop}>
+          Go to Top view
+        </button>
+        {onRetry && (
+          <button className="btn" onClick={onRetry}>
+            Try again
+          </button>
+        )}
+      </div>
     </div>
   )
 }
