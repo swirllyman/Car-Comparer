@@ -1,19 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { searchCars, type Kind, type SortBy } from '../data/search'
-import type { CarSpec, ResolvedCar, Units } from '../data/types'
+import { activeFilters, NO_FILTERS, passes, powerOf, searchCars, type Body, type Filters, type SortBy } from '../data/search'
+import type { CarSpec, Power, ResolvedCar, Units } from '../data/types'
 import { portLabel } from '../geometry/charge'
+import type { FitInfo } from '../geometry/fit'
 import { carFullName, resolveCar } from '../geometry/resolve'
 import { formatLength } from '../geometry/units'
 import { EditIcon } from './icons'
 
-const KINDS: { id: Kind; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'suv', label: 'SUVs' },
-  { id: 'truck', label: 'Trucks' },
-  { id: 'minivan', label: 'Minivans' },
-  { id: 'car', label: 'Cars' },
-  { id: 'electric', label: 'Electric' },
+const POWERS: { id: Power; label: string }[] = [
+  { id: 'ev', label: 'Electric' },
+  { id: 'hybrid', label: 'Hybrid' },
+  { id: 'phev', label: 'Plug-in' },
+  { id: 'gas', label: 'Gas' },
 ]
+
+const BODIES: { id: Body; label: string }[] = [
+  { id: 'suv', label: 'SUV' },
+  { id: 'truck', label: 'Truck' },
+  { id: 'minivan', label: 'Minivan' },
+  { id: 'car', label: 'Car' },
+]
+
+const POWER_LABEL: Record<Power, string> = { ev: 'Electric', hybrid: 'Hybrid', phev: 'Plug-in', gas: 'Gas' }
+
+const seatText = (c: CarSpec) => (c.seats ? (c.seats[0] === c.seats[1] ? `${c.seats[0]} seats` : `${c.seats[0]}–${c.seats[1]} seats`) : null)
+
+const toggle = <T,>(list: T[], item: T) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item])
+
+
 
 interface Props {
   label: string
@@ -24,9 +38,14 @@ interface Props {
   /** The car sizes are compared against (the user's own car). */
   reference: ResolvedCar
   units: Units
-  /** Whether a car fits the garage where the user's car parks; null when not worth showing. */
-  fits: ((c: ResolvedCar) => boolean) | null
+  /** How a car fits the garage (centred); null on the picker where it isn't worth showing. */
+  fitLevel: ((c: ResolvedCar) => FitInfo) | null
+  /** Whether the charger's cable reaches the car's port; null when there's no answer. */
+  cableReaches: (c: ResolvedCar) => boolean | null
+  hasCharger: boolean
   garageIsMine: boolean
+  filters: Filters
+  onFilters: (f: Filters) => void
   onSelect: (id: string) => void
   onEdit: () => void
   onAdd: (query: string) => void
@@ -74,7 +93,6 @@ export function CarPicker(p: Props) {
 
 function SearchSheet(p: Props & { onClose: () => void }) {
   const [query, setQuery] = useState('')
-  const [kind, setKind] = useState<Kind>('all')
   const [sortBy, setSortBy] = useState<SortBy>('match')
   const [active, setActive] = useState(0)
   const input = useRef<HTMLInputElement>(null)
@@ -82,13 +100,25 @@ function SearchSheet(p: Props & { onClose: () => void }) {
 
   useEffect(() => input.current?.focus(), [])
 
+  // The garage filters only make sense on the "Compare" picker.
+  const hasGarage = !!p.fitLevel
+  const f = useMemo(() => (hasGarage ? p.filters : { ...p.filters, fits: false, cable: false }), [hasGarage, p.filters])
+  const setF = (patch: Partial<Filters>) => {
+    p.onFilters({ ...p.filters, ...patch })
+    setActive(0)
+  }
+  const { fitLevel, cableReaches } = p
   const results = useMemo(() => {
-    const found = searchCars(p.cars, query, kind, sortBy, (c) => resolveCar(c).widthMirrors)
+    const checks = {
+      fits: (c: CarSpec) => (fitLevel ? fitLevel(resolveCar(c)).level !== 'no' : true),
+      cableReaches: (c: CarSpec) => cableReaches(resolveCar(c)),
+    }
+    const found = searchCars(p.cars, query, (c) => passes(c, f, checks), sortBy, (c) => resolveCar(c).widthMirrors)
     // With nothing typed, float recent picks to the top.
     if (query.trim() || sortBy !== 'match') return found
     const recent = p.recentIds.map((id) => found.find((c) => c.id === id)).filter((c): c is CarSpec => !!c)
     return [...recent, ...found.filter((c) => !recent.includes(c))]
-  }, [p.cars, p.recentIds, query, kind, sortBy])
+  }, [p.cars, p.recentIds, query, f, sortBy, fitLevel, cableReaches])
 
   useEffect(() => {
     list.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' })
@@ -139,33 +169,77 @@ function SearchSheet(p: Props & { onClose: () => void }) {
             Edit dimensions of <strong>{carFullName(p.selected)}</strong>
           </span>
         </button>
-        <div className="search__filters">
-          {KINDS.map((k) => (
-            <button key={k.id} className="chip" aria-pressed={kind === k.id} onClick={() => {
-                setKind(k.id)
-                setActive(0)
-              }}>
-              {k.label}
+        <div className="search__filters" role="group" aria-label="Filters">
+          {p.fitLevel && (
+            <button className="chip chip--key" aria-pressed={f.fits} onClick={() => setF({ fits: !p.filters.fits })}>
+              ✓ Fits my garage
+            </button>
+          )}
+          {p.fitLevel && p.hasCharger && (
+            <button className="chip chip--key" aria-pressed={f.cable} onClick={() => setF({ cable: !p.filters.cable })}>
+              ⚡ Charger reaches
+            </button>
+          )}
+          <select
+            className={`chip chip--select${f.seats ? ' chip--on' : ''}`}
+            value={f.seats}
+            onChange={(e) => setF({ seats: Number(e.target.value) })}
+            aria-label="Seats"
+          >
+            <option value={0}>Any seats</option>
+            <option value={5}>5+ seats</option>
+            <option value={6}>6+ seats</option>
+            <option value={7}>7+ seats</option>
+            <option value={8}>8+ seats</option>
+          </select>
+          {POWERS.map((x) => (
+            <button key={x.id} className="chip" aria-pressed={f.power.includes(x.id)} onClick={() => setF({ power: toggle(p.filters.power, x.id) })}>
+              {x.label}
             </button>
           ))}
-          <select value={sortBy} onChange={(e) => {
+          <button className="chip" aria-pressed={f.awd} onClick={() => setF({ awd: !p.filters.awd })}>
+            AWD
+          </button>
+          {BODIES.map((x) => (
+            <button key={x.id} className="chip" aria-pressed={f.body.includes(x.id)} onClick={() => setF({ body: toggle(p.filters.body, x.id) })}>
+              {x.label}
+            </button>
+          ))}
+          <select
+            className="chip chip--select"
+            value={sortBy}
+            onChange={(e) => {
               setSortBy(e.target.value as SortBy)
               setActive(0)
-            }} aria-label="Sort">
+            }}
+            aria-label="Sort"
+          >
             <option value="match">Best match</option>
             <option value="length">Shortest first</option>
             <option value="width">Narrowest first</option>
           </select>
         </div>
         <p className="search__meta muted small">
-          {results.length} {results.length === 1 ? 'car' : 'cars'} · sizes vs your {p.reference.model}
-          {p.fits && (p.garageIsMine ? ' · fit checked against your garage' : ' · fit checked against the sample garage')}
+          {results.length} {results.length === 1 ? 'car' : 'cars'}
+          {activeFilters(f) > 0 && (
+            <>
+              {' · '}
+              <button className="link" onClick={() => p.onFilters(NO_FILTERS)}>
+                clear {activeFilters(f)} {activeFilters(f) === 1 ? 'filter' : 'filters'}
+              </button>
+            </>
+          )}
+          {' · '}sizes vs your {p.reference.model}
+          {p.fitLevel && (p.garageIsMine ? ' · fit: centred in your garage' : ' · fit: centred in the sample garage')}
         </p>
         <ul className="search__list" id="car-results" ref={list} role="listbox">
           {results.map((c, i) => {
             const r = resolveCar(c)
             const dl = r.length - p.reference.length
-            const fits = p.fits?.(r)
+            const fit = p.fitLevel?.(r)
+            const level = fit?.level
+            const cable = p.fitLevel ? p.cableReaches(r) : null
+            const tags = [seatText(c), powerOf(c).map((x) => POWER_LABEL[x]).join('/') || null, c.awd === false ? 'FWD only' : c.awd ? 'AWD' : null].filter(Boolean)
             return (
               <li key={c.id}>
                 {i === 0 && recentCount > 0 && <div className="search__group">Recent</div>}
@@ -190,13 +264,18 @@ function SearchSheet(p: Props & { onClose: () => void }) {
                       {Math.abs(dl) < 0.5 ? 'same length' : `${formatLength(Math.abs(dl), p.units)} ${dl > 0 ? 'longer' : 'shorter'}`}
                     </span>
                   </span>
-                  {c.chargePorts?.length ? (
-                    <span className="result__port muted">
-                      ⚡ {c.chargePorts.map(portLabel).join(' + ')}
-                      {c.portConfirmed === false ? ' (unconfirmed)' : ''}
+                  <span className="result__port muted">
+                    {tags.join(' · ')}
+                    {c.chargePorts?.length ? ` · ⚡ ${c.chargePorts.map(portLabel).join(' + ')}${c.portConfirmed === false ? ' (unconfirmed)' : ''}` : ''}
+                  </span>
+                  {level && (
+                    <span className="result__badges">
+                      <span className={`badge badge--${level === 'fits' ? 'ok' : level === 'tight' ? 'tight' : 'bad'}`}>
+                        {level === 'fits' ? 'Fits' : level === 'tight' ? `Tight ${formatLength(fit!.room, p.units).replace(/(\d) in$/, '$1″')}` : 'Too big'}
+                      </span>
+                      {cable !== null && <span className={`badge badge--${cable ? 'ok' : 'bad'}`}>⚡ {cable ? 'reaches' : 'short'}</span>}
                     </span>
-                  ) : null}
-                  {fits !== undefined && <span className={`badge badge--${fits ? 'ok' : 'bad'}`}>{fits ? 'Fits' : 'Too big'}</span>}
+                  )}
                 </button>
               </li>
             )

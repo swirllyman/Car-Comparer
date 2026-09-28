@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { inches } from '../geometry/units'
 import { CARS, DEFAULT_CANDIDATE_ID, DEFAULT_CURRENT_ID } from './cars'
+import { NO_FILTERS, type Filters } from './search'
 import type { Anchor, CarSpec, Garage, Units, View } from './types'
 
 const KEY = 'car-comparer.v1'
@@ -18,6 +19,8 @@ export interface AppState {
   customCars: CarSpec[]
   /** Most recently picked cars, newest first. */
   recentIds: string[]
+  /** Car search filters, kept between searches. */
+  filters: Filters
 }
 
 /**
@@ -51,6 +54,7 @@ export function freshState(): AppState {
     garageIsMine: true,
     customCars: [],
     recentIds: [],
+    filters: NO_FILTERS,
   }
 }
 
@@ -71,7 +75,7 @@ function load(): AppState {
       delete saved.garage
       delete saved.garageIsMine
     }
-    return { ...freshState(), ...saved }
+    return { ...freshState(), ...saved, filters: { ...NO_FILTERS, ...saved.filters } }
   } catch {
     // Unreadable storage should never stop the app; start from defaults.
     return freshState()

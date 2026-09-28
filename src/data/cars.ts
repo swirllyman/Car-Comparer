@@ -1,5 +1,6 @@
 import { inches } from '../geometry/units'
 import { CATALOG } from './catalog'
+import { withMeta } from './meta'
 import type { CarSpec } from './types'
 
 /**
@@ -149,7 +150,7 @@ const CORE: CarSpec[] = [
 ]
 
 /** Hand-checked cars first, then the wider catalogue. */
-export const CARS: CarSpec[] = [...CORE, ...CATALOG.filter((c) => !CORE.some((k) => k.id === c.id))]
+export const CARS: CarSpec[] = [...CORE, ...CATALOG.filter((c) => !CORE.some((k) => k.id === c.id))].map(withMeta)
 
 export const DEFAULT_CURRENT_ID = 'toyota-rav4-hybrid-2019-xle'
 export const DEFAULT_CANDIDATE_ID = 'tesla-model-y-2026-premium'

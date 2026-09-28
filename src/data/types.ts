@@ -3,6 +3,9 @@ export type Mm = number
 
 export type BodyType = 'sedan' | 'hatchback' | 'wagon' | 'suv' | 'minivan' | 'truck'
 
+/** Powertrains a model is sold with. */
+export type Power = 'gas' | 'hybrid' | 'phev' | 'ev'
+
 /**
  * Where a charge port sits. Side is from the driver's seat (US: left is the
  * driver's side); "center" is a nose-mounted port. End is which axle it's by.
@@ -32,6 +35,11 @@ export interface CarSpec {
   groundClearance?: Mm
   /** Battery-electric. */
   ev?: boolean
+  /** Fewest and most seats across the seating options. */
+  seats?: [number, number]
+  power?: Power[]
+  /** All-wheel drive available. */
+  awd?: boolean
   chargePorts?: ChargePort[]
   /** False when the port location came from a single or indirect source. */
   portConfirmed?: boolean

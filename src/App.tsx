@@ -13,7 +13,7 @@ import { allCars, findCar, useAppState } from './data/store'
 import type { Anchor, CarSpec, ResolvedCar, Units, View } from './data/types'
 import { checkCable, portLabel } from './geometry/charge'
 import { compareCars, type Comparison } from './geometry/compare'
-import { checkFit, clearanceLevel, currentParking, DOOR_COMFORT, type Parking } from './geometry/fit'
+import { centredParking, checkFit, clearanceLevel, currentParking, DOOR_COMFORT, fitLevel, type Parking } from './geometry/fit'
 import { carFullName, resolveCar } from './geometry/resolve'
 import { formatDelta, formatLength, inches } from './geometry/units'
 
@@ -146,7 +146,14 @@ export default function App() {
       units={units}
       garageIsMine={state.garageIsMine}
       // Fit badges answer "will this replace my car?", so only on the other picker.
-      fits={which === 'candidateId' ? (c) => checkFit(garage, c, curPark).fits : null}
+      fitLevel={which === 'candidateId' ? (c) => fitLevel(garage, c) : null}
+      cableReaches={(c) => {
+        const cable = checkCable(garage, c, centredParking(garage, c))
+        return cable ? cable.needed <= cable.cable : null
+      }}
+      hasCharger={!!garage.charger}
+      filters={state.filters}
+      onFilters={(filters) => update({ filters })}
       onSelect={(id) => choose(which, id)}
       onEdit={() => setEditing({ kind: 'car', which, car: findCar(state.customCars, state[which]) })}
       onAdd={(q) => setEditing({ kind: 'car', which, car: carFromQuery(q) })}

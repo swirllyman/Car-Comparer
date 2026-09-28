@@ -161,3 +161,29 @@ export function clearanceLevel(mm: Mm, comfortable: Mm = inches(3)): 'bad' | 'ti
 
 /** Getting out of a car wants roughly two feet beside the door. */
 export const DOOR_COMFORT: Mm = inches(24)
+
+/** Parked in the middle of the garage, facing the way the garage says cars park. */
+export function centredParking(garage: Garage, car: ResolvedCar): Parking {
+  return { centerX: garage.width / 2, topY: (garage.depth - car.length) / 2, reversed: !!garage.backedIn }
+}
+
+/** Anything under this at the ends or sides counts as a squeeze. */
+const SNUG: Mm = inches(4)
+
+export interface FitInfo {
+  level: 'fits' | 'tight' | 'no'
+  /** The smallest gap at the ends or sides (negative when it doesn't fit). */
+  room: Mm
+}
+
+/**
+ * Fits / tight / too big, with the car centred: the best case, so a "too
+ * big" can't be fixed by parking better.
+ */
+export function fitLevel(garage: Garage, car: ResolvedCar): FitInfo {
+  const f = checkFit(garage, car, centredParking(garage, car))
+  const room = Math.min(f.left.value, f.right.value, f.front.value, f.rear.value)
+  if (!f.fits) return { level: 'no', room }
+  const doors = Math.min(f.driverDoor.value, f.passengerDoor.value)
+  return { level: room < SNUG || doors < DOOR_COMFORT ? 'tight' : 'fits', room }
+}
