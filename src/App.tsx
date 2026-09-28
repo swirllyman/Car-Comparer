@@ -4,8 +4,10 @@ import { CompareView } from './components/CompareView'
 import { CarEditor, GarageSetup } from './components/forms'
 import { FitPanel, GarageView } from './components/GarageView'
 import { CARS } from './data/cars'
+import { isElectric } from './data/search'
 import { allCars, findCar, useAppState } from './data/store'
 import type { Anchor, CarSpec, Garage, ResolvedCar, Units, View } from './data/types'
+import { checkCable, portLabel } from './geometry/charge'
 import { compareCars } from './geometry/compare'
 import { checkFit, currentParking, type Parking } from './geometry/fit'
 import { carFullName, resolveCar } from './geometry/resolve'
@@ -265,9 +267,23 @@ function DimTable({ current, candidate, units }: { current: ResolvedCar; candida
             </tr>
           )
         })}
+        {(isElectric(current) || isElectric(candidate)) && (
+          <tr>
+            <th>Charge port</th>
+            <td>{portText(current)}</td>
+            <td>{portText(candidate)}</td>
+            <td />
+          </tr>
+        )}
       </tbody>
     </table>
   )
+}
+
+function portText(c: ResolvedCar): string {
+  if (!isElectric(c)) return '—'
+  if (!c.chargePorts?.length) return 'unknown'
+  return c.chargePorts.map(portLabel).join(' + ') + (c.portConfirmed === false ? ' (unconfirmed)' : '')
 }
 
 function StatsTable({ current, candidate, units }: { current: ResolvedCar; candidate: ResolvedCar; units: Units }) {
@@ -350,7 +366,16 @@ function GarageTab(p: {
           />
           <p className="muted small center">Drag the orange car to re-park it.</p>
         </div>
-        <FitPanel fit={fit} currentFit={currentFit} units={p.units} />
+        <FitPanel
+          fit={fit}
+          currentFit={currentFit}
+          cable={checkCable(p.garage, p.candidate, p.candPark)}
+          currentCable={checkCable(p.garage, p.current, p.curPark)}
+          isEv={isElectric(p.candidate)}
+          hasCharger={!!p.garage.charger}
+          onAddCharger={p.onEditGarage}
+          units={p.units}
+        />
       </div>
     </>
   )

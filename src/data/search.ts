@@ -4,7 +4,7 @@ export type Kind = 'all' | 'suv' | 'truck' | 'minivan' | 'car' | 'electric'
 
 const ELECTRIC = /tesla|rivian|ioniq|\bev\d|\bev\b|mach-e|cybertruck/i
 
-export const isElectric = (c: CarSpec) => ELECTRIC.test(`${c.make} ${c.model}`)
+export const isElectric = (c: CarSpec) => !!c.ev || ELECTRIC.test(`${c.make} ${c.model}`)
 
 const KIND_OF: Record<BodyType, Kind> = {
   suv: 'suv',

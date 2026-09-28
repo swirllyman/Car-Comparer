@@ -1,4 +1,5 @@
 import type { ResolvedCar } from '../data/types'
+import { portLabel, portPoints } from '../geometry/charge'
 import {
   frontBody,
   frontMirrors,
@@ -37,6 +38,15 @@ export function CarTop({ car, x, y, variant }: { car: ResolvedCar; x: number; y:
       <Rects rects={topMirrors(car)} className="car__body" />
       <path d={toPath(topBody(car))} className="car__body" />
       <path d={toPath(topGlass(car))} className="car__glass" />
+      {portPoints(car).map((p, i) => (
+        <g key={i} className="car__port">
+          <title>Charge port: {portLabel(p.port)}</title>
+          <circle cx={p.x} cy={p.y} r={110} />
+          <text x={p.x} y={p.y} fontSize={150} textAnchor="middle" dominantBaseline="central">
+            ⚡
+          </text>
+        </g>
+      ))}
     </g>
   )
 }

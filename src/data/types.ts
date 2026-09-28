@@ -3,6 +3,17 @@ export type Mm = number
 
 export type BodyType = 'sedan' | 'hatchback' | 'wagon' | 'suv' | 'minivan' | 'truck'
 
+/**
+ * Where a charge port sits. Side is from the driver's seat (US: left is the
+ * driver's side); "center" is a nose-mounted port. End is which axle it's by.
+ */
+export interface ChargePort {
+  side: 'left' | 'right' | 'center'
+  end: 'front' | 'rear'
+  /** e.g. "AC only" when a car has two ports. */
+  note?: string
+}
+
 export interface CarSpec {
   id: string
   year: number
@@ -19,6 +30,11 @@ export interface CarSpec {
   wheelbase: Mm
   frontOverhang?: Mm
   groundClearance?: Mm
+  /** Battery-electric. */
+  ev?: boolean
+  chargePorts?: ChargePort[]
+  /** False when the port location came from a single or indirect source. */
+  portConfirmed?: boolean
   /** Free-form secondary stats for the comparison table. */
   stats?: Record<string, string>
   /** Where the numbers came from, so a surprising answer can be checked. */
@@ -59,6 +75,15 @@ export interface Garage {
   parkedLeftGap: Mm
   parkedFrontGap: Mm
   obstacles: Obstacle[]
+  /** Wall-mounted charger, if there is one. */
+  charger?: Charger
+}
+
+export interface Charger {
+  wall: 'left' | 'right' | 'back'
+  /** Along the wall: from the back wall for side walls, from the left wall for the back wall. */
+  along: Mm
+  cable: Mm
 }
 
 export type Units = 'in' | 'ftin' | 'cm'

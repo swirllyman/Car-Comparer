@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { BodyType, CarSpec, Garage, Mm, Obstacle, Units } from '../data/types'
-import { fromUnit, inches, inputUnitLabel, toUnit } from '../geometry/units'
+import type { BodyType, CarSpec, Charger, Garage, Mm, Obstacle, Units } from '../data/types'
+import { parsePorts } from '../data/catalog'
+import { feet, fromUnit, inches, inputUnitLabel, toUnit } from '../geometry/units'
 
 /** A length input that shows and accepts the user's units but stores mm. */
 export function LengthInput({ label, value, units, onChange, hint, optional }: {
@@ -80,6 +81,47 @@ export function GarageSetup({ garage, units, onSave, onCancel }: {
         {L('parkedFrontGap', 'Back wall to front bumper')}
       </fieldset>
       <fieldset>
+        <legend>EV charger</legend>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!!g.charger}
+            onChange={(e) =>
+              set({ charger: e.target.checked ? { wall: 'left', along: Math.min(feet(10), g.depth / 2), cable: feet(24) } : undefined })
+            }
+          />{' '}
+          I have a wall charger
+        </label>
+        {g.charger && (
+          <>
+            <label className="field">
+              <span className="field__label">Which wall</span>
+              <select
+                value={g.charger.wall}
+                onChange={(e) => set({ charger: { ...g.charger!, wall: e.target.value as Charger['wall'] } })}
+              >
+                <option value="left">Left wall (facing the back wall)</option>
+                <option value="right">Right wall</option>
+                <option value="back">Back wall</option>
+              </select>
+            </label>
+            <LengthInput
+              label={g.charger.wall === 'back' ? 'From the left wall' : 'From the back wall'}
+              units={units}
+              value={g.charger.along}
+              onChange={(v) => set({ charger: { ...g.charger!, along: v ?? 0 } })}
+            />
+            <LengthInput
+              label="Cable length"
+              hint="Tesla Wall Connector: 24 ft (or 8.5 ft). Most other home chargers: 18–25 ft."
+              units={units}
+              value={g.charger.cable}
+              onChange={(v) => set({ charger: { ...g.charger!, cable: v ?? 0 } })}
+            />
+          </>
+        )}
+      </fieldset>
+      <fieldset>
         <legend>Things in the way</legend>
         <p className="muted">Workbenches, steps, freezers, bins… Position is from the left wall and the back wall to the item’s nearest corner.</p>
         {g.obstacles.map((o) => (
@@ -121,6 +163,16 @@ export function GarageSetup({ garage, units, onSave, onCancel }: {
       </div>
     </div>
   )
+}
+
+/** The editor's single-port code for a car: "LF", "gas", "unknown" or "multi". */
+function portCode(c: CarSpec): string {
+  if (!c.ev && !c.chargePorts) return 'gas'
+  const ports = c.chargePorts ?? []
+  if (ports.length === 0) return 'unknown'
+  if (ports.length > 1) return 'multi'
+  const p = ports[0]
+  return `${p.side === 'left' ? 'L' : p.side === 'right' ? 'R' : 'C'}${p.end === 'front' ? 'F' : 'R'}`
 }
 
 const BODY_TYPES: BodyType[] = ['sedan', 'hatchback', 'wagon', 'suv', 'minivan', 'truck']
@@ -183,6 +235,27 @@ export function CarEditor({ car, units, isOverride, onSave, onReset, onCancel }:
                 {b}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field__label">Charge port</span>
+          <select
+            value={portCode(c)}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v === 'gas') set({ ev: false, chargePorts: undefined, portConfirmed: undefined })
+              else if (v === 'unknown') set({ ev: true, chargePorts: undefined, portConfirmed: undefined })
+              else set({ ev: true, chargePorts: parsePorts(v).ports, portConfirmed: true })
+            }}
+          >
+            <option value="gas">Not electric</option>
+            <option value="LF">Driver side, front</option>
+            <option value="LR">Driver side, rear</option>
+            <option value="RF">Passenger side, front</option>
+            <option value="RR">Passenger side, rear</option>
+            <option value="CF">In the nose</option>
+            {portCode(c) === 'multi' && <option value="multi">Several (as published)</option>}
+            <option value="unknown">Electric, port unknown</option>
           </select>
         </label>
       </fieldset>

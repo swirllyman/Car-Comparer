@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { searchCars, type Kind, type SortBy } from '../data/search'
 import type { CarSpec, ResolvedCar, Units } from '../data/types'
+import { portLabel } from '../geometry/charge'
 import { carFullName, resolveCar } from '../geometry/resolve'
-import { formatDelta, formatLength } from '../geometry/units'
+import { formatLength } from '../geometry/units'
 
 const KINDS: { id: Kind; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -171,9 +172,15 @@ function SearchSheet(p: Props & { onClose: () => void }) {
                     {L(r.length)} long · {L(r.widthMirrors)} with mirrors{r.estimated.includes('widthMirrors') ? '*' : ''}
                     {' · '}
                     <span className={`delta delta--${Math.abs(dl) < 0.5 ? 'same' : dl > 0 ? 'bigger' : 'smaller'}`}>
-                      {Math.abs(dl) < 0.5 ? 'same length' : `${formatDelta(dl, p.units)} ${dl > 0 ? 'longer' : 'shorter'}`}
+                      {Math.abs(dl) < 0.5 ? 'same length' : `${formatLength(Math.abs(dl), p.units)} ${dl > 0 ? 'longer' : 'shorter'}`}
                     </span>
                   </span>
+                  {c.chargePorts?.length ? (
+                    <span className="result__port muted">
+                      ⚡ {c.chargePorts.map(portLabel).join(' + ')}
+                      {c.portConfirmed === false ? ' (unconfirmed)' : ''}
+                    </span>
+                  ) : null}
                   {fits !== undefined && <span className={`badge badge--${fits ? 'ok' : 'bad'}`}>{fits ? 'Fits' : 'Too big'}</span>}
                 </button>
               </li>

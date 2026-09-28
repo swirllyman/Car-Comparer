@@ -1,8 +1,9 @@
 import { useRef, type PointerEvent } from 'react'
 import type { Garage, ResolvedCar, Units } from '../data/types'
 import { checkFit, clearanceLevel, DOOR_COMFORT, type Clearance, type Fit, type Parking } from '../geometry/fit'
+import { checkCable, chargerPoint, portLabel, type CableCheck } from '../geometry/charge'
 import { MIRROR_DEPTH, mirrorY } from '../geometry/shapes'
-import { formatDelta, formatLength } from '../geometry/units'
+import { formatDelta, formatLength, inches } from '../geometry/units'
 import { CarTop, DimLine } from './draw'
 
 interface Props {
@@ -23,6 +24,8 @@ export function GarageView({ garage, current, candidate, currentPark, candidateP
   const svg = useRef<SVGSVGElement>(null)
   const drag = useRef<{ dx: number; dy: number } | null>(null)
   const fit = checkFit(garage, candidate, candidatePark)
+  const charger = chargerPoint(garage)
+  const cable = checkCable(garage, candidate, candidatePark)
   const fs = Math.max(garage.width, garage.depth) * 0.028
 
   const toMm = (e: PointerEvent) => {
@@ -86,10 +89,24 @@ export function GarageView({ garage, current, candidate, currentPark, candidateP
           </text>
         </g>
       ))}
+      {charger && (
+        <g className="charger">
+          <rect x={charger[0] - 150} y={charger[1] - 150} width={300} height={300} rx={60} />
+          <text x={charger[0]} y={charger[1]} fontSize={200} textAnchor="middle" dominantBaseline="central">
+            ⚡
+          </text>
+        </g>
+      )}
       {showCurrent && <CarTop car={current} x={currentPark.centerX} y={currentPark.frontY} variant="current" />}
       <g onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className="draggable">
         <CarTop car={candidate} x={candidatePark.centerX} y={candidatePark.frontY} variant="candidate" />
       </g>
+      {cable && (
+        <polyline
+          className={`cable cable--${cable.needed <= cable.cable ? 'ok' : 'bad'}`}
+          points={cable.path.map(([x, y]) => `${x},${y}`).join(' ')}
+        />
+      )}
       <DimLine a={[lx - fit.left.value, ly]} b={[lx, ly]} label={f(fit.left)} fs={fs} tone={tone(fit.left.value)} labelAt={-0.9} />
       <DimLine a={[rx, ry]} b={[rx + fit.right.value, ry]} label={f(fit.right)} fs={fs} tone={tone(fit.right.value)} labelAt={-0.9} />
       <DimLine a={[candidatePark.centerX, body.y0]} b={[candidatePark.centerX, body.y0 - fit.front.value]} label={f(fit.front)} fs={fs} tone={tone(fit.front.value)} anchor="start" labelAt={0.6} />
@@ -104,8 +121,19 @@ const tone = (mm: number) => {
 }
 
 /** The readout beside the garage drawing. */
-export function FitPanel({ fit, currentFit, units }: { fit: Fit; currentFit: Fit; units: Units }) {
+export function FitPanel({ fit, currentFit, cable, currentCable, isEv, hasCharger, onAddCharger, units }: {
+  fit: Fit
+  currentFit: Fit
+  cable: CableCheck | null
+  currentCable: CableCheck | null
+  isEv: boolean
+  hasCharger: boolean
+  onAddCharger: () => void
+  units: Units
+}) {
   const L = (mm: number) => formatLength(mm, units)
+  // Cables are sold in feet, so show them that way unless the user is metric.
+  const C = (mm: number) => formatLength(mm, units === 'cm' ? 'cm' : 'ftin')
   const vs = (a: number, b: number) => {
     const diff = a - b
     return Math.abs(diff) < 0.5 ? 'same as now' : `${formatDelta(diff, units)} vs now`
@@ -163,6 +191,31 @@ export function FitPanel({ fit, currentFit, units }: { fit: Fit; currentFit: Fit
               <span className="note">above the roof</span>
             </td>
           </tr>
+          {isEv && (
+            <tr>
+              <th>Charging cable</th>
+              <td>
+                {!hasCharger ? (
+                  <button className="link" onClick={onAddCharger}>
+                    Add your charger
+                  </button>
+                ) : cable ? (
+                  <>
+                    <span className={`lvl lvl--${cable.needed <= cable.cable ? (cable.cable - cable.needed < inches(24) ? 'tight' : 'ok') : 'bad'}`}>
+                      {C(cable.needed)} of {C(cable.cable)}
+                    </span>
+                    <span className="note">
+                      to the {portLabel(cable.port.port)} port
+                      {currentCable ? ` · ${vs(cable.needed, currentCable.needed).replace('vs now', 'vs your car')}` : ''}
+                      {cable.needed > cable.cable ? ' · too short from here' : ''}
+                    </span>
+                  </>
+                ) : (
+                  <span className="note">Port location unknown for this car</span>
+                )}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>
