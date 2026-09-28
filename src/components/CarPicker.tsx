@@ -5,7 +5,8 @@ import { portLabel } from '../geometry/charge'
 import type { FitInfo } from '../geometry/fit'
 import { carFullName, resolveCar } from '../geometry/resolve'
 import { formatLength } from '../geometry/units'
-import { EditIcon } from './icons'
+import { CarInfo } from './CarInfo'
+import { EditIcon, InfoIcon } from './icons'
 
 const POWERS: { id: Power; label: string }[] = [
   { id: 'ev', label: 'Electric' },
@@ -95,6 +96,7 @@ function SearchSheet(p: Props & { onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [sortBy, setSortBy] = useState<SortBy>('match')
   const [active, setActive] = useState(0)
+  const [info, setInfo] = useState<CarSpec | null>(null)
   const input = useRef<HTMLInputElement>(null)
   const list = useRef<HTMLUListElement>(null)
 
@@ -143,7 +145,7 @@ function SearchSheet(p: Props & { onClose: () => void }) {
         role="dialog"
         aria-label={`Choose: ${p.label}`}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.key === 'Escape' && p.onClose()}
+        onKeyDown={(e) => e.key === 'Escape' && (info ? setInfo(null) : p.onClose())}
       >
         <div className="search__head">
           <input
@@ -244,43 +246,53 @@ function SearchSheet(p: Props & { onClose: () => void }) {
               <li key={c.id}>
                 {i === 0 && recentCount > 0 && <div className="search__group">Recent</div>}
                 {i === recentCount && recentCount > 0 && <div className="search__group">All cars</div>}
-                <button
-                  role="option"
-                  aria-selected={c.id === p.selected.id}
-                  data-active={i === active}
-                  className="result"
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => p.onSelect(c.id)}
-                >
-                  <span className="result__name">
-                    {c.year} {c.make} {c.model}
-                    {c.trim && <span className="muted"> {c.trim}</span>}
-                    {c.custom && <span className="muted"> ✎</span>}
-                  </span>
-                  <span className="result__size muted">
-                    {L(r.length)} long · {L(r.widthMirrors)} with mirrors{r.estimated.includes('widthMirrors') ? '*' : ''}
-                    {' · '}
-                    <span className={`delta delta--${Math.abs(dl) < 0.5 ? 'same' : dl > 0 ? 'bigger' : 'smaller'}`}>
-                      {Math.abs(dl) < 0.5 ? 'same length' : `${formatLength(Math.abs(dl), p.units)} ${dl > 0 ? 'longer' : 'shorter'}`}
+                <div className="result-row" data-active={i === active} onMouseEnter={() => setActive(i)}>
+                  <button role="option" aria-selected={c.id === p.selected.id} className="result" onClick={() => p.onSelect(c.id)}>
+                    <span className="result__name">
+                      {c.year} {c.make} {c.model}
+                      {c.trim && <span className="muted"> {c.trim}</span>}
+                      {c.custom && <span className="muted"> ✎</span>}
                     </span>
-                  </span>
-                  <span className="result__port muted">
-                    {tags.join(' · ')}
-                    {c.chargePorts?.length ? ` · ⚡ ${c.chargePorts.map(portLabel).join(' + ')}${c.portConfirmed === false ? ' (unconfirmed)' : ''}` : ''}
-                  </span>
-                  {level && (
-                    <span className="result__badges">
+                    <span className="result__size muted">
+                      {L(r.length)} long · {L(r.widthMirrors)} with mirrors{r.estimated.includes('widthMirrors') ? '*' : ''}
+                      {' · '}
+                      <span className={`delta delta--${Math.abs(dl) < 0.5 ? 'same' : dl > 0 ? 'bigger' : 'smaller'}`}>
+                        {Math.abs(dl) < 0.5 ? 'same length' : `${formatLength(Math.abs(dl), p.units)} ${dl > 0 ? 'longer' : 'shorter'}`}
+                      </span>
+                    </span>
+                    <span className="result__port muted">
+                      {tags.join(' · ')}
+                      {c.chargePorts?.length ? ` · ⚡ ${c.chargePorts.map(portLabel).join(' + ')}${c.portConfirmed === false ? ' (unconfirmed)' : ''}` : ''}
+                    </span>
+                  </button>
+                  <div className="result__side">
+                    {level && (
                       <span className={`badge badge--${level === 'fits' ? 'ok' : level === 'tight' ? 'tight' : 'bad'}`}>
                         {level === 'fits' ? 'Fits' : level === 'tight' ? `Tight ${formatLength(fit!.room, p.units).replace(/(\d) in$/, '$1″')}` : 'Too big'}
                       </span>
-                      {cable !== null && <span className={`badge badge--${cable ? 'ok' : 'bad'}`}>⚡ {cable ? 'reaches' : 'short'}</span>}
-                    </span>
-                  )}
-                </button>
+                    )}
+                    {cable !== null && <span className={`badge badge--${cable ? 'ok' : 'bad'}`}>⚡ {cable ? 'reaches' : 'short'}</span>}
+                    <button className="infobtn" aria-label={`About the ${c.year} ${c.make} ${c.model}`} onClick={() => setInfo(c)}>
+                      <InfoIcon />
+                    </button>
+                  </div>
+                </div>
               </li>
             )
           })}
         </ul>
+        {info && (
+          <CarInfo
+            car={info}
+            reference={p.reference}
+            units={p.units}
+            fit={p.fitLevel?.(resolveCar(info))}
+            cable={p.fitLevel ? p.cableReaches(resolveCar(info)) : null}
+            isSelected={info.id === p.selected.id}
+            onPick={() => p.onSelect(info.id)}
+            onClose={() => setInfo(null)}
+          />
+        )}
         <div className="search__foot">
           <p className="small">
             <strong>Can’t find it?</strong> Look up its dimensions, then add it.
