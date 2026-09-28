@@ -16,6 +16,8 @@ export interface AppState {
   garageIsMine: boolean
   /** Hand-entered or edited cars; an entry with a built-in id overrides it. */
   customCars: CarSpec[]
+  /** Most recently picked cars, newest first. */
+  recentIds: string[]
 }
 
 /** A plain single-car garage with the current car parked in the middle. */
@@ -42,6 +44,7 @@ export function freshState(): AppState {
     garage: sampleGarage(),
     garageIsMine: false,
     customCars: [],
+    recentIds: [],
   }
 }
 

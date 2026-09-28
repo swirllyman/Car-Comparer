@@ -1,4 +1,5 @@
 import { inches } from '../geometry/units'
+import { CATALOG } from './catalog'
 import type { CarSpec } from './types'
 
 /**
@@ -8,7 +9,7 @@ import type { CarSpec } from './types'
  * says so. For the car you own, a tape measure beats all of this: use "Edit
  * dimensions" to enter your own numbers.
  */
-export const CARS: CarSpec[] = [
+const CORE: CarSpec[] = [
   {
     id: 'toyota-rav4-hybrid-2019-xle',
     year: 2019,
@@ -143,6 +144,9 @@ export const CARS: CarSpec[] = [
     source: 'Ford 2025 F-150 spec summaries (height varies by trim and 4x2/4x4)',
   },
 ]
+
+/** Hand-checked cars first, then the wider catalogue. */
+export const CARS: CarSpec[] = [...CORE, ...CATALOG.filter((c) => !CORE.some((k) => k.id === c.id))]
 
 export const DEFAULT_CURRENT_ID = 'toyota-rav4-hybrid-2019-xle'
 export const DEFAULT_CANDIDATE_ID = 'tesla-model-y-2026-premium'

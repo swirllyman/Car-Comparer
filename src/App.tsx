@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react'
+import { CarPicker } from './components/CarPicker'
 import { CompareView } from './components/CompareView'
 import { CarEditor, GarageSetup } from './components/forms'
 import { FitPanel, GarageView } from './components/GarageView'
@@ -28,6 +29,19 @@ const ANCHORS: { id: Anchor; label: string }[] = [
 ]
 
 type Editing = { kind: 'garage' } | { kind: 'car'; which: 'currentId' | 'candidateId'; car: CarSpec } | null
+
+/** A new car pre-filled from whatever was typed in search, e.g. "2026 Kia Telluride". */
+function carFromQuery(q: string): CarSpec {
+  const words = q.trim().split(/\s+/).filter(Boolean)
+  const yearWord = words.find((w) => /^(19|20)\d\d$/.test(w))
+  const rest = words.filter((w) => w !== yearWord)
+  const title = (w: string) => w.charAt(0).toUpperCase() + w.slice(1)
+  return {
+    ...NEW_CAR(),
+    ...(yearWord ? { year: Number(yearWord) } : {}),
+    ...(rest.length > 0 ? { make: title(rest[0]), model: rest.slice(1).map(title).join(' ') || 'Model' } : {}),
+  }
+}
 
 const NEW_CAR = (): CarSpec => ({
   id: `custom-${crypto.randomUUID()}`,
@@ -100,37 +114,26 @@ export default function App() {
     )
   }
 
+  const choose = (which: 'currentId' | 'candidateId', id: string) => {
+    update({ [which]: id, recentIds: [id, ...state.recentIds.filter((r) => r !== id)].slice(0, 5) })
+    setCandidatePark(null)
+  }
+
   const picker = (which: 'currentId' | 'candidateId', label: string) => (
-    <div className="picker">
-      <span className="picker__label">{label}</span>
-      <div className="picker__row">
-        <select
-          value={state[which]}
-          onChange={(e) => {
-            if (e.target.value === '__new') setEditing({ kind: 'car', which, car: NEW_CAR() })
-            else {
-              update({ [which]: e.target.value })
-              setCandidatePark(null)
-            }
-          }}
-        >
-          {cars.map((c) => (
-            <option key={c.id} value={c.id}>
-              {carFullName(c)}
-              {c.custom ? ' ✎' : ''}
-            </option>
-          ))}
-          <option value="__new">+ Add a car…</option>
-        </select>
-        <button
-          className="btn btn--quiet"
-          title="Edit dimensions"
-          onClick={() => setEditing({ kind: 'car', which, car: findCar(state.customCars, state[which]) })}
-        >
-          Edit
-        </button>
-      </div>
-    </div>
+    <CarPicker
+      label={label}
+      selected={findCar(state.customCars, state[which])}
+      cars={cars}
+      recentIds={state.recentIds}
+      reference={current}
+      units={units}
+      garageIsMine={state.garageIsMine}
+      // Fit badges answer "will this replace my car?", so only on the other picker.
+      fits={which === 'candidateId' ? (c) => checkFit(garage, c, { centerX: curPark.centerX, frontY: curPark.frontY }).fits : null}
+      onSelect={(id) => choose(which, id)}
+      onEdit={() => setEditing({ kind: 'car', which, car: findCar(state.customCars, state[which]) })}
+      onAdd={(q) => setEditing({ kind: 'car', which, car: carFromQuery(q) })}
+    />
   )
 
   return (
