@@ -283,6 +283,7 @@ function SearchSheet(p: Props & { onClose: () => void }) {
         </ul>
         {info && (
           <CarInfo
+            key={info.id}
             car={info}
             reference={p.reference}
             units={p.units}

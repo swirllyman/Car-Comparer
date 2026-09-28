@@ -42,7 +42,8 @@ export function CarInfo({ car: spec, reference, units, fit, cable, isSelected, o
 }) {
   const car = resolveCar(spec)
   const [summary, setSummary] = useState<CarSummary | null | undefined>(undefined)
-  const [imgFailed, setImgFailed] = useState(false)
+  // Which photo candidate we're on; past the end means none would load.
+  const [imgIndex, setImgIndex] = useState(0)
   useEffect(() => {
     let live = true
     carSummary(spec).then((s) => live && setSummary(s))
@@ -51,6 +52,7 @@ export function CarInfo({ car: spec, reference, units, fit, cable, isSelected, o
     }
   }, [spec])
 
+  const photo = summary?.images[imgIndex]
   const L = (mm: number) => formatLength(mm, units)
   const D = (mm: number, what: string) => (Math.abs(mm) < 0.5 ? `same ${what}` : `${formatDelta(mm, units)} ${what}`)
   const est = (k: ResolvedCar['estimated'][number]) => (car.estimated.includes(k) ? ' (est.)' : '')
@@ -92,25 +94,27 @@ export function CarInfo({ car: spec, reference, units, fit, cable, isSelected, o
       </div>
       <div className="info__body">
         <figure className="info__photo">
-          {summary?.image && !imgFailed ? (
-            <img src={summary.image} alt={`${spec.make} ${spec.model}`} onError={() => setImgFailed(true)} />
+          {photo ? (
+            <img src={photo} alt={`${spec.make} ${spec.model}`} onError={() => setImgIndex((i) => i + 1)} />
           ) : (
             <Silhouette car={car} />
           )}
           <figcaption className="muted small">
-            {summary === undefined
-              ? 'Looking for a photo…'
-              : summary?.image && !imgFailed
-                ? (
-                    <>
-                      Photo:{' '}
-                      <a href={summary.page} target="_blank" rel="noreferrer">
-                        Wikipedia
-                      </a>{' '}
-                      · may show a different year or trim
-                    </>
-                  )
-                : 'No photo found; drawn to scale from the dimensions.'}
+            {summary === undefined ? (
+              'Looking for a photo…'
+            ) : photo ? (
+              <>
+                Photo:{' '}
+                <a href={summary!.page} target="_blank" rel="noreferrer">
+                  Wikipedia
+                </a>{' '}
+                · may show a different year or trim
+              </>
+            ) : summary?.images.length ? (
+              'The photo couldn’t load; drawn to scale from the dimensions.'
+            ) : (
+              'No photo found; drawn to scale from the dimensions.'
+            )}
           </figcaption>
         </figure>
 

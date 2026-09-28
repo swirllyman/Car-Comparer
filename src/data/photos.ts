@@ -36,8 +36,24 @@ export interface CarSummary {
   title: string
   description?: string
   extract?: string
-  image?: string
+  /** Photo URLs to try in order, sharpest first. */
+  images: string[]
   page: string
+}
+
+/**
+ * Wikimedia only serves thumbnails at its standard widths (others get HTTP
+ * 429), and never wider than the original; so offer a few standard sizes,
+ * then the API's own thumbnail and the original as last resorts.
+ */
+const STANDARD_WIDTHS = [960, 500, 330]
+
+export function photoCandidates(thumb?: string, original?: string): string[] {
+  const out: string[] = []
+  if (thumb && /\/\d+px-/.test(thumb)) for (const w of STANDARD_WIDTHS) out.push(thumb.replace(/\/\d+px-/, `/${w}px-`))
+  if (thumb) out.push(thumb)
+  if (original) out.push(original)
+  return [...new Set(out)]
 }
 
 const cache = new Map<string, Promise<CarSummary | null>>()
@@ -52,6 +68,7 @@ async function fetchTitle(title: string): Promise<CarSummary | null> {
     description?: string
     extract?: string
     thumbnail?: { source: string }
+    originalimage?: { source: string }
     content_urls?: { desktop?: { page?: string } }
   }
   // Disambiguation pages list several cars; no use here.
@@ -60,8 +77,7 @@ async function fetchTitle(title: string): Promise<CarSummary | null> {
     title: d.title,
     description: d.description,
     extract: d.extract,
-    // Thumbnails come at 320px; ask for a sharper one for high-density phones.
-    image: d.thumbnail?.source.replace(/\/(\d+)px-/, '/640px-'),
+    images: photoCandidates(d.thumbnail?.source, d.originalimage?.source),
     page: d.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
   }
 }
@@ -76,7 +92,7 @@ export function carSummary(c: CarSpec): Promise<CarSummary | null> {
       for (const t of titlesFor(c)) {
         try {
           const s = await fetchTitle(t)
-          if (s?.image) return s
+          if (s?.images.length) return s
           fallback ??= s
         } catch {
           // Offline or blocked: try the next title, then give up quietly.
