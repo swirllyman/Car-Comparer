@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { carSummary, type CarSummary } from '../data/photos'
+import { carSummary, type SummaryResult } from '../data/photos'
 import { isElectric, powerOf } from '../data/search'
 import type { CarSpec, Power, ResolvedCar, Units } from '../data/types'
 import { portLabel } from '../geometry/charge'
@@ -41,17 +41,18 @@ export function CarInfo({ car: spec, reference, units, fit, cable, isSelected, o
   onClose: () => void
 }) {
   const car = resolveCar(spec)
-  const [summary, setSummary] = useState<CarSummary | null | undefined>(undefined)
+  const [result, setResult] = useState<SummaryResult | undefined>(undefined)
   // Which photo candidate we're on; past the end means none would load.
   const [imgIndex, setImgIndex] = useState(0)
   useEffect(() => {
     let live = true
-    carSummary(spec).then((s) => live && setSummary(s))
+    carSummary(spec).then((s) => live && setResult(s))
     return () => {
       live = false
     }
   }, [spec])
 
+  const summary = result === 'unreachable' ? null : result
   const photo = summary?.images[imgIndex]
   const L = (mm: number) => formatLength(mm, units)
   const D = (mm: number, what: string) => (Math.abs(mm) < 0.5 ? `same ${what}` : `${formatDelta(mm, units)} ${what}`)
@@ -100,8 +101,10 @@ export function CarInfo({ car: spec, reference, units, fit, cable, isSelected, o
             <Silhouette car={car} />
           )}
           <figcaption className="muted small">
-            {summary === undefined ? (
+            {result === undefined ? (
               'Looking for a photo…'
+            ) : result === 'unreachable' ? (
+              'Couldn’t reach Wikipedia for a photo; drawn to scale from the dimensions.'
             ) : photo ? (
               <>
                 Photo:{' '}

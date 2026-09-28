@@ -1,10 +1,12 @@
 import type { CarSpec } from './types'
 
 /**
- * Car photos and one-line summaries from Wikipedia's page-summary API, which
- * allows cross-site requests and serves freely licensed Commons images.
- * Wikipedia titles don't always match how cars are sold, so each car tries a
- * short list of titles, most specific first.
+ * Car photos and one-line summaries from Wikipedia's Action API, which
+ * serves anonymous cross-site requests (`origin=*`) and freely licensed
+ * Commons images. (The older REST v1 summary endpoint is being retired and
+ * stopped answering.) Wikipedia titles don't always match how cars are sold,
+ * so each car tries a short list of titles, most specific first, all in one
+ * request.
  */
 const TITLES: Record<string, string[]> = {
   'Toyota RAV4 Hybrid': ['Toyota RAV4 (XA50)', 'Toyota RAV4'],
@@ -56,50 +58,85 @@ export function photoCandidates(thumb?: string, original?: string): string[] {
   return [...new Set(out)]
 }
 
-const cache = new Map<string, Promise<CarSummary | null>>()
+/** A summary, or null when Wikipedia answered but had nothing; 'unreachable' when it didn't answer. */
+export type SummaryResult = CarSummary | null | 'unreachable'
 
-async function fetchTitle(title: string): Promise<CarSummary | null> {
-  const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`
-  const res = await fetch(url, { headers: { accept: 'application/json' } })
-  if (!res.ok) return null
-  const d = (await res.json()) as {
-    type?: string
-    title: string
-    description?: string
-    extract?: string
-    thumbnail?: { source: string }
-    originalimage?: { source: string }
-    content_urls?: { desktop?: { page?: string } }
-  }
-  // Disambiguation pages list several cars; no use here.
-  if (d.type && d.type !== 'standard') return null
-  return {
-    title: d.title,
-    description: d.description,
-    extract: d.extract,
-    images: photoCandidates(d.thumbnail?.source, d.originalimage?.source),
-    page: d.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
+const cache = new Map<string, Promise<SummaryResult>>()
+
+interface ApiPage {
+  title: string
+  missing?: boolean
+  description?: string
+  extract?: string
+  thumbnail?: { source: string }
+  original?: { source: string }
+}
+
+interface ApiResponse {
+  query?: {
+    normalized?: { from: string; to: string }[]
+    redirects?: { from: string; to: string }[]
+    pages?: ApiPage[]
   }
 }
 
-/** The first title with a photo, or the first that exists at all; null offline or when nothing matches. */
-export function carSummary(c: CarSpec): Promise<CarSummary | null> {
+const pageUrl = (title: string) => `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`
+
+/** Pick the best page from an Action API answer: the first candidate title that has a photo, else the first that exists. */
+export function pickSummary(titles: string[], data: ApiResponse): CarSummary | null {
+  const q = data.query
+  if (!q?.pages) return null
+  const follow = (t: string) => {
+    let out = t
+    for (const list of [q.normalized ?? [], q.redirects ?? []]) out = list.find((x) => x.from === out)?.to ?? out
+    return out
+  }
+  const found = titles
+    .map((t) => q.pages!.find((p) => p.title === follow(t) && !p.missing))
+    .filter((p): p is ApiPage => !!p)
+    .map(
+      (p): CarSummary => ({
+        title: p.title,
+        description: p.description,
+        extract: p.extract,
+        images: photoCandidates(p.thumbnail?.source, p.original?.source),
+        page: pageUrl(p.title),
+      }),
+    )
+  return found.find((s) => s.images.length > 0) ?? found[0] ?? null
+}
+
+export function summaryUrl(titles: string[]): string {
+  const params = new URLSearchParams({
+    action: 'query',
+    format: 'json',
+    formatversion: '2',
+    origin: '*',
+    redirects: '1',
+    prop: 'pageimages|description|extracts',
+    piprop: 'thumbnail|original',
+    pithumbsize: '960',
+    exintro: '1',
+    explaintext: '1',
+    exsentences: '3',
+    titles: titles.join('|'),
+  })
+  return `https://en.wikipedia.org/w/api.php?${params}`
+}
+
+export function carSummary(c: CarSpec): Promise<SummaryResult> {
   const key = `${c.make} ${c.model}`
   let p = cache.get(key)
   if (!p) {
-    p = (async () => {
-      let fallback: CarSummary | null = null
-      for (const t of titlesFor(c)) {
-        try {
-          const s = await fetchTitle(t)
-          if (s?.images.length) return s
-          fallback ??= s
-        } catch {
-          // Offline or blocked: try the next title, then give up quietly.
-        }
-      }
-      return fallback
-    })()
+    const titles = titlesFor(c)
+    p = fetch(summaryUrl(titles))
+      .then((res) => (res.ok ? (res.json() as Promise<ApiResponse>) : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((data) => pickSummary(titles, data))
+      .catch((): SummaryResult => {
+        // Don't remember a failure; the next open can try again.
+        cache.delete(key)
+        return 'unreachable'
+      })
     cache.set(key, p)
   }
   return p
