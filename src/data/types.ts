@@ -69,11 +69,13 @@ export interface Garage {
   /** Left edge of the door opening, measured from the left wall. */
   doorOffset: Mm
   /**
-   * Where the current car sits, measured with it parked nose-in: from the left
-   * wall to the left side of the body, and from the back wall to the front bumper.
+   * Where the current car sits: from the left wall to the nearest side of the
+   * body, and from the back wall to the nearest bumper.
    */
   parkedLeftGap: Mm
   parkedFrontGap: Mm
+  /** Reversed in, rear bumper toward the back wall. */
+  backedIn?: boolean
   obstacles: Obstacle[]
   /** Wall-mounted charger, if there is one. */
   charger?: Charger

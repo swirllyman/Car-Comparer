@@ -126,4 +126,14 @@ describe('checkFit', () => {
     close(f.left.value, 31 - 18)
     expect(f.left.against).toContain('Shelf')
   })
+  it('turns everything round when backed in', () => {
+    const g: Garage = { ...garage, backedIn: true, parkedLeftGap: inches(20) }
+    const f = checkFit(g, a, currentParking(g, a))
+    // Driver's side now faces the right wall: 144 − 20 − 72 = 52 in of room.
+    close(f.driverDoor.value, 52)
+    close(f.passengerDoor.value, 20)
+    // Rear bumper 24 in from the back wall, so the same end clearances.
+    close(f.front.value, 24)
+    close(f.rear.value, 240 - 24 - 180)
+  })
 })

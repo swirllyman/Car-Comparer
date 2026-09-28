@@ -31,8 +31,10 @@ export function defaultGarage(): Garage {
     doorWidth: inches(95),
     doorHeight: inches(85),
     doorOffset: inches(18),
-    parkedLeftGap: inches(35.5),
+    // Centred: (125 − 73) / 2 for the RAV4's body, backed in.
+    parkedLeftGap: inches(26),
     parkedFrontGap: inches(24),
+    backedIn: true,
     obstacles: [],
     charger: { wall: 'right', along: inches(75), cable: inches(288) },
   }
@@ -52,13 +54,20 @@ export function freshState(): AppState {
   }
 }
 
+function isFirstSharedGarage(g: Garage | undefined): boolean {
+  const near = (mm: number, inch: number) => Math.abs(mm - inches(inch)) < 1
+  return !!g && near(g.width, 125) && near(g.depth, 195) && near(g.parkedLeftGap, 35.5) && g.backedIn === undefined
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return freshState()
     const saved = JSON.parse(raw) as Partial<AppState>
-    // A garage nobody ever saved is the old sample; replace it with ours.
-    if (!saved.garageIsMine) {
+    // A garage nobody ever saved is the old sample, and one still exactly as
+    // first shared (off-centre, nose in) predates the centred, backed-in
+    // default; either way, start from the current default.
+    if (!saved.garageIsMine || isFirstSharedGarage(saved.garage)) {
       delete saved.garage
       delete saved.garageIsMine
     }

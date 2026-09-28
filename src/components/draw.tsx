@@ -30,10 +30,12 @@ const Rects = ({ rects, className }: { rects: Rect[]; className: string }) => (
   </>
 )
 
-/** Top view, nose up, front bumper at (x, y) with x the centreline. */
-export function CarTop({ car, x, y, variant }: { car: ResolvedCar; x: number; y: number; variant: Variant }) {
+/** Top view, nose up, front bumper at (x, y) with x the centreline (or turned round when reversed). */
+export function CarTop({ car, x, y, variant, reversed }: { car: ResolvedCar; x: number; y: number; variant: Variant; reversed?: boolean }) {
+  // Turned round (backed in), the front bumper ends up at y + length.
+  const transform = reversed ? `translate(${x} ${y + car.length}) rotate(180)` : `translate(${x} ${y})`
   return (
-    <g transform={`translate(${x} ${y})`} className={`car car--${variant}`}>
+    <g transform={transform} className={`car car--${variant}`}>
       <Rects rects={topTires(car)} className="car__tire" />
       <Rects rects={topMirrors(car)} className="car__body" />
       <path d={toPath(topBody(car))} className="car__body" />

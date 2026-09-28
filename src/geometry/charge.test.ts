@@ -77,4 +77,13 @@ describe('checkCable', () => {
     const g = { ...garage, charger: { wall: 'left' as const, along: feet(10), cable: feet(24) } }
     expect(checkCable(g, resolveCar(gas), currentParking(g, car))).toBeNull()
   })
+  it('finds a rear port by the garage door when backed in', () => {
+    const g = { ...garage, backedIn: true, charger: { wall: 'left' as const, along: feet(15), cable: feet(24) } }
+    const noseIn = { ...g, backedIn: false }
+    const back = checkCable(g, car, currentParking(g, car))!
+    const nose = checkCable(noseIn, car, currentParking(noseIn, car))!
+    // Nose in, the left-rear port is on the charger's wall near 15 ft; backed in
+    // it swaps to the right side and the far end, so it needs more cable.
+    expect(back.needed).toBeGreaterThan(nose.needed)
+  })
 })

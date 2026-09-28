@@ -2,16 +2,40 @@ import type { Garage, Mm, Obstacle, ResolvedCar } from '../data/types'
 import { MIRROR_DEPTH, mirrorY } from './shapes'
 import { inches } from './units'
 
-/** Where a car sits in the garage, nose-in. x from the left wall, y from the back wall. */
+/**
+ * Where a car sits in the garage. x from the left wall, y from the back wall;
+ * `topY` is the bumper nearest the back wall — the front one when parked nose
+ * in, the rear one when backed in.
+ */
 export interface Parking {
   centerX: Mm
-  frontY: Mm
+  topY: Mm
+  reversed: boolean
 }
 
 /** Where the current car is, from the gaps the user measured. */
 export function currentParking(garage: Garage, car: ResolvedCar): Parking {
-  return { centerX: garage.parkedLeftGap + car.widthBody / 2, frontY: garage.parkedFrontGap }
+  return { centerX: garage.parkedLeftGap + car.widthBody / 2, topY: garage.parkedFrontGap, reversed: !!garage.backedIn }
 }
+
+/**
+ * A point in car coordinates (x across with the driver's side negative, y back
+ * from the front bumper) placed in the garage. Backing in turns the car
+ * round, so its driver's side ends up on the right-hand wall.
+ */
+export function toGarage(car: ResolvedCar, park: Parking, x: Mm, y: Mm): [Mm, Mm] {
+  return park.reversed ? [park.centerX - x, park.topY + car.length - y] : [park.centerX + x, park.topY + y]
+}
+
+/** The span along the garage covered by a stretch of the car measured back from its front bumper. */
+function span(car: ResolvedCar, park: Parking, fromFront: Mm, length: Mm): { y0: Mm; y1: Mm } {
+  const a = toGarage(car, park, 0, fromFront)[1]
+  const b = toGarage(car, park, 0, fromFront + length)[1]
+  return { y0: Math.min(a, b), y1: Math.max(a, b) }
+}
+
+/** Where the mirrors are along the garage. */
+export const mirrorBand = (car: ResolvedCar, park: Parking) => span(car, park, mirrorY(car), MIRROR_DEPTH)
 
 export interface Clearance {
   value: Mm
@@ -70,25 +94,20 @@ function lateral(garage: Garage, body: Box, band: Box, side: 'left' | 'right'): 
   return best
 }
 
-/** Front-door band: roughly the first third of the wheelbase behind the mirrors. */
-function doorBand(car: ResolvedCar, park: Parking): { y0: Mm; y1: Mm } {
-  const y0 = park.frontY + mirrorY(car)
-  return { y0, y1: y0 + inches(42) }
-}
+/** Front-door band: the first 42 in behind the mirrors. */
+const doorBand = (car: ResolvedCar, park: Parking) => span(car, park, mirrorY(car), inches(42))
 
 export function checkFit(garage: Garage, car: ResolvedCar, park: Parking): Fit {
   const body: Box = {
     x0: park.centerX - car.widthBody / 2,
     x1: park.centerX + car.widthBody / 2,
-    y0: park.frontY,
-    y1: park.frontY + car.length,
+    y0: park.topY,
+    y1: park.topY + car.length,
   }
-  const my = park.frontY + mirrorY(car)
   const mirrors: Box = {
     x0: park.centerX - car.widthMirrors / 2,
     x1: park.centerX + car.widthMirrors / 2,
-    y0: my,
-    y1: my + MIRROR_DEPTH,
+    ...mirrorBand(car, park),
   }
 
   const tighter = (a: Clearance, b: Clearance, bLabel: string): Clearance =>
@@ -105,8 +124,9 @@ export function checkFit(garage: Garage, car: ResolvedCar, park: Parking): Fit {
   const rear: Clearance = { value: garage.depth - body.y1, against: 'garage door' }
 
   const band = doorBand(car, park)
-  const driverDoor = lateral(garage, body, { ...body, ...band }, 'left')
-  const passengerDoor = lateral(garage, body, { ...body, ...band }, 'right')
+  const driverSide = park.reversed ? 'right' : 'left'
+  const driverDoor = lateral(garage, body, { ...body, ...band }, driverSide)
+  const passengerDoor = lateral(garage, body, { ...body, ...band }, driverSide === 'left' ? 'right' : 'left')
 
   // You drive through the middle of the door and straighten up inside, so the
   // doorway check is the car centred in the opening, not on its parked line.

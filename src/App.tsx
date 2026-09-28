@@ -83,8 +83,8 @@ export default function App() {
   const cmp = compareCars(current, candidate, anchor)
 
   const curPark = currentParking(garage, current)
-  // By default the new car pulls up to the same stop, on the same line.
-  const candPark = candidatePark ?? { centerX: curPark.centerX, frontY: curPark.frontY }
+  // By default the new car pulls up to the same stop, on the same line, facing the same way.
+  const candPark = candidatePark ?? curPark
 
   const saveCar = (c: CarSpec, which: 'currentId' | 'candidateId') => {
     update({ customCars: [...state.customCars.filter((x) => x.id !== c.id), c], [which]: c.id })
@@ -96,6 +96,7 @@ export default function App() {
       <div className="page">
         <GarageSetup
           garage={garage}
+          carWidth={current.widthBody}
           units={units}
           onCancel={() => setEditing(null)}
           onSave={(g) => {
@@ -142,7 +143,7 @@ export default function App() {
       units={units}
       garageIsMine={state.garageIsMine}
       // Fit badges answer "will this replace my car?", so only on the other picker.
-      fits={which === 'candidateId' ? (c) => checkFit(garage, c, { centerX: curPark.centerX, frontY: curPark.frontY }).fits : null}
+      fits={which === 'candidateId' ? (c) => checkFit(garage, c, curPark).fits : null}
       onSelect={(id) => choose(which, id)}
       onEdit={() => setEditing({ kind: 'car', which, car: findCar(state.customCars, state[which]) })}
       onAdd={(q) => setEditing({ kind: 'car', which, car: carFromQuery(q) })}
@@ -183,7 +184,7 @@ export default function App() {
                 className="iconbtn iconbtn--small"
                 aria-label="Centre it"
                 title="Centre it"
-                onClick={() => setCandidatePark({ centerX: garage.width / 2, frontY: candPark.frontY })}
+                onClick={() => setCandidatePark({ ...candPark, centerX: garage.width / 2 })}
               >
                 <CentreIcon />
               </button>
@@ -391,8 +392,8 @@ function GarageStrip({ fit, currentFit, cable, isEv, hasCharger, units, onOpen }
       <div className="strip__tiles strip__tiles--3">
         <Tile label="Left" value={L(fit.left.value)} sub={vs(fit.left.value, currentFit.left.value)} level={clearanceLevel(fit.left.value)} />
         <Tile label="Right" value={L(fit.right.value)} sub={vs(fit.right.value, currentFit.right.value)} level={clearanceLevel(fit.right.value)} />
-        <Tile label="Behind" value={L(fit.rear.value)} sub={vs(fit.rear.value, currentFit.rear.value)} level={clearanceLevel(fit.rear.value)} />
-        <Tile label="In front" value={L(fit.front.value)} sub={vs(fit.front.value, currentFit.front.value)} level={clearanceLevel(fit.front.value)} />
+        <Tile label="To door" value={L(fit.rear.value)} sub={vs(fit.rear.value, currentFit.rear.value)} level={clearanceLevel(fit.rear.value)} />
+        <Tile label="Back wall" value={L(fit.front.value)} sub={vs(fit.front.value, currentFit.front.value)} level={clearanceLevel(fit.front.value)} />
         <Tile label="Door room" value={L(door)} sub={vs(door, doorNow)} level={clearanceLevel(door, DOOR_COMFORT)} />
         {isEv ? (
           <Tile

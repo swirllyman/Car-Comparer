@@ -1,5 +1,5 @@
 import type { ChargePort, Garage, Mm, ResolvedCar } from '../data/types'
-import type { Parking } from './fit'
+import { toGarage, type Parking } from './fit'
 import { wheelRadius } from './shapes'
 import { inches } from './units'
 
@@ -135,15 +135,16 @@ export function checkCable(g: Garage, car: ResolvedCar, park: Parking): CableChe
   const body: Rect = {
     x0: park.centerX - car.widthBody / 2,
     x1: park.centerX + car.widthBody / 2,
-    y0: park.frontY,
-    y1: park.frontY + car.length,
+    y0: park.topY,
+    y1: park.topY + car.length,
   }
   let result: CableCheck | null = null
   for (const p of ports) {
     // Step the port just outside the body so the route can reach it.
     const out = 60
-    const px = park.centerX + p.x + (p.port.side === 'left' ? -out : p.port.side === 'right' ? out : 0)
-    const py = park.frontY + p.y + (p.port.side === 'center' ? (p.port.end === 'front' ? -out : out) : 0)
+    const dx = p.port.side === 'left' ? -out : p.port.side === 'right' ? out : 0
+    const dy = p.port.side === 'center' ? (p.port.end === 'front' ? -out : out) : 0
+    const [px, py] = toGarage(car, park, p.x + dx, p.y + dy)
     const route = routeAround(charger, [px, py], body)
     if (!route) continue
     const needed = route.length + CABLE_ALLOWANCE

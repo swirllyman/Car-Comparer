@@ -44,8 +44,10 @@ export function LengthInput({ label, value, units, onChange, hint, optional }: {
   )
 }
 
-export function GarageSetup({ garage, units, onSave, onCancel }: {
+export function GarageSetup({ garage, carWidth, units, onSave, onCancel }: {
   garage: Garage
+  /** Body width of the current car, for "centre it". */
+  carWidth: Mm
   units: Units
   onSave: (g: Garage) => void
   onCancel: () => void
@@ -73,12 +75,28 @@ export function GarageSetup({ garage, units, onSave, onCancel }: {
         <legend>The garage door opening</legend>
         {L('doorWidth', 'Opening width')}
         {L('doorHeight', 'Opening height', 'Floor to the bottom of the open door or its track')}
-        {L('doorOffset', 'Left wall to opening', 'Standing inside, facing out: left wall to the left edge of the opening')}
+        {L('doorOffset', 'Left wall to opening', 'Standing inside, facing the back wall: left wall to the nearest edge of the opening')}
       </fieldset>
       <fieldset>
-        <legend>Where my current car parks (nose in)</legend>
-        {L('parkedLeftGap', 'Left wall to car body', 'To the body, not the mirror, as the car sits parked')}
-        {L('parkedFrontGap', 'Back wall to front bumper')}
+        <legend>Where my current car parks</legend>
+        <label className="field">
+          <span className="field__label">How it parks</span>
+          <select value={g.backedIn ? 'back' : 'nose'} onChange={(e) => set({ backedIn: e.target.value === 'back' })}>
+            <option value="nose">Nose in (front toward the back wall)</option>
+            <option value="back">Backed in (rear toward the back wall)</option>
+          </select>
+        </label>
+        <div className="row">
+          <button
+            type="button"
+            className="btn btn--quiet"
+            onClick={() => set({ parkedLeftGap: Math.max(0, (g.width - carWidth) / 2) })}
+          >
+            Centre it between the walls
+          </button>
+        </div>
+        {L('parkedLeftGap', 'Left wall to car body', 'Standing inside, facing the back wall; to the body, not the mirror')}
+        {L('parkedFrontGap', g.backedIn ? 'Back wall to rear bumper' : 'Back wall to front bumper')}
       </fieldset>
       <fieldset>
         <legend>EV charger</legend>

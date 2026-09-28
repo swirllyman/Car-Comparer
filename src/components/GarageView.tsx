@@ -1,8 +1,7 @@
 import { useRef, type PointerEvent } from 'react'
 import type { Garage, ResolvedCar, Units } from '../data/types'
-import { checkFit, clearanceLevel, DOOR_COMFORT, type Clearance, type Fit, type Parking } from '../geometry/fit'
+import { checkFit, clearanceLevel, DOOR_COMFORT, mirrorBand, type Clearance, type Fit, type Parking } from '../geometry/fit'
 import { checkCable, chargerPoint, portLabel, type CableCheck } from '../geometry/charge'
-import { MIRROR_DEPTH, mirrorY } from '../geometry/shapes'
 import { formatDelta, formatLength, inches } from '../geometry/units'
 import { CarTop, DimLine } from './draw'
 import { fontFor, type Box } from './useSize'
@@ -37,26 +36,27 @@ export function GarageView({ garage, current, candidate, currentPark, candidateP
   }
   const down = (e: PointerEvent<SVGGElement>) => {
     const [x, y] = toMm(e)
-    drag.current = { dx: x - candidatePark.centerX, dy: y - candidatePark.frontY }
+    drag.current = { dx: x - candidatePark.centerX, dy: y - candidatePark.topY }
     e.currentTarget.setPointerCapture(e.pointerId)
   }
   const move = (e: PointerEvent<SVGGElement>) => {
     if (!drag.current) return
     const [x, y] = toMm(e)
     // Snap to whole millimetres; the readouts are the precise part.
-    onMove({ centerX: Math.round(x - drag.current.dx), frontY: Math.round(y - drag.current.dy) })
+    onMove({ ...candidatePark, centerX: Math.round(x - drag.current.dx), topY: Math.round(y - drag.current.dy) })
   }
   const up = () => (drag.current = null)
 
   const body = {
     x0: candidatePark.centerX - candidate.widthBody / 2,
     x1: candidatePark.centerX + candidate.widthBody / 2,
-    y0: candidatePark.frontY,
-    y1: candidatePark.frontY + candidate.length,
+    y0: candidatePark.topY,
+    y1: candidatePark.topY + candidate.length,
   }
   const midY = (body.y0 + body.y1) / 2
   // Draw each side gap from whichever part is closest: the mirror or the body.
-  const mY = candidatePark.frontY + mirrorY(candidate) + MIRROR_DEPTH / 2
+  const mb = mirrorBand(candidate, candidatePark)
+  const mY = (mb.y0 + mb.y1) / 2
   const atMirror = (c: Clearance) => c.against.endsWith('(at mirror)')
   const lx = atMirror(fit.left) ? candidatePark.centerX - candidate.widthMirrors / 2 : body.x0
   const rx = atMirror(fit.right) ? candidatePark.centerX + candidate.widthMirrors / 2 : body.x1
@@ -80,9 +80,12 @@ export function GarageView({ garage, current, candidate, currentPark, candidateP
             M${garage.doorOffset + garage.doorWidth},${garage.depth} H${garage.width + WALL} V${garage.depth + WALL} H${garage.doorOffset + garage.doorWidth}Z`}
       />
       <line x1={garage.doorOffset} y1={garage.depth + WALL / 2} x2={garage.doorOffset + garage.doorWidth} y2={garage.depth + WALL / 2} className="garage__door" />
-      <text x={garage.doorOffset + garage.doorWidth / 2} y={garage.depth + WALL + fs * 1.1} fontSize={fs * 0.8} textAnchor="middle" className="drawing__note">
-        garage door
-      </text>
+      {/* Skip the caption when the car pokes through the doorway; its gap label goes there. */}
+      {fit.rear.value >= 0 && (
+        <text x={garage.doorOffset + garage.doorWidth / 2} y={garage.depth + WALL + fs * 1.1} fontSize={fs * 0.8} textAnchor="middle" className="drawing__note">
+          garage door
+        </text>
+      )}
       {garage.obstacles.map((o) => (
         <g key={o.id} className="garage__obstacle">
           <rect x={o.x} y={o.y} width={o.w} height={o.d} />
@@ -99,9 +102,9 @@ export function GarageView({ garage, current, candidate, currentPark, candidateP
           </text>
         </g>
       )}
-      {showCurrent && <CarTop car={current} x={currentPark.centerX} y={currentPark.frontY} variant="current" />}
+      {showCurrent && <CarTop car={current} x={currentPark.centerX} y={currentPark.topY} variant="current" reversed={currentPark.reversed} />}
       <g onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className="draggable">
-        <CarTop car={candidate} x={candidatePark.centerX} y={candidatePark.frontY} variant="candidate" />
+        <CarTop car={candidate} x={candidatePark.centerX} y={candidatePark.topY} variant="candidate" reversed={candidatePark.reversed} />
       </g>
       {cable && (
         <polyline
@@ -143,8 +146,8 @@ export function FitPanel({ fit, currentFit, cable, currentCable, isEv, hasCharge
   const rows: { label: string; value: number; now: number; note?: string; comfort?: number }[] = [
     { label: 'Left side', value: fit.left.value, now: currentFit.left.value, note: fit.left.against },
     { label: 'Right side', value: fit.right.value, now: currentFit.right.value, note: fit.right.against },
-    { label: 'In front', value: fit.front.value, now: currentFit.front.value, note: fit.front.against },
-    { label: 'Behind', value: fit.rear.value, now: currentFit.rear.value, note: 'to the closed garage door' },
+    { label: 'To back wall', value: fit.front.value, now: currentFit.front.value, note: fit.front.against },
+    { label: 'To garage door', value: fit.rear.value, now: currentFit.rear.value, note: 'with the door closed' },
     { label: 'Driver door room', value: fit.driverDoor.value, now: currentFit.driverDoor.value, note: fit.driverDoor.against, comfort: DOOR_COMFORT },
     { label: 'Passenger door room', value: fit.passengerDoor.value, now: currentFit.passengerDoor.value, note: fit.passengerDoor.against, comfort: DOOR_COMFORT },
   ]
