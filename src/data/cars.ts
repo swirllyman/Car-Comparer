@@ -59,18 +59,20 @@ export const CARS: CarSpec[] = [
     source: 'Subaru 2025 Outback spec summaries',
   },
   {
-    id: 'tesla-model-y-2025',
-    year: 2025,
+    id: 'tesla-model-y-2026-premium',
+    year: 2026,
     make: 'Tesla',
     model: 'Model Y',
-    trim: 'Long Range',
+    trim: 'Premium',
     bodyType: 'suv',
     length: inches(188.6),
     widthBody: inches(75.6),
     widthMirrors: 2129,
     height: inches(63.9),
     wheelbase: inches(113.8),
-    source: 'Tesla 2025 Model Y spec summaries (mirrors-out 2129 mm)',
+    groundClearance: 167,
+    stats: { 'Width, mirrors folded': '78.0 in' },
+    source: 'Tesla 2026 Model Y Premium spec summaries (same body for RWD and AWD; mirrors out 2129 mm, folded 1982 mm)',
   },
   {
     id: 'toyota-highlander-hybrid-2025',
@@ -143,4 +145,4 @@ export const CARS: CarSpec[] = [
 ]
 
 export const DEFAULT_CURRENT_ID = 'toyota-rav4-hybrid-2019-xle'
-export const DEFAULT_CANDIDATE_ID = 'toyota-highlander-hybrid-2025'
+export const DEFAULT_CANDIDATE_ID = 'tesla-model-y-2026-premium'
