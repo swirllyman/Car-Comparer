@@ -91,6 +91,9 @@ describe('checkFit', () => {
     close(f.rear.value, 240 - 24 - 180)
     close(f.driverDoor.value, 36)
     close(f.doorwayTop, 84 - 66)
+    // Driven through the middle of a 108 in door with 82 in of mirrors.
+    close(f.doorwayLeft, 13)
+    close(f.doorwayRight, 13)
     expect(f.fits).toBe(true)
   })
   it('flags a car that stops the door closing', () => {

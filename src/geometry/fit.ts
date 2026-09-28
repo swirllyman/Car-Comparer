@@ -28,7 +28,7 @@ export interface Fit {
   /** Space beside the driver's (left) door, body to the nearest thing. */
   driverDoor: Clearance
   passengerDoor: Clearance
-  /** Per side, driving through the door opening with mirrors out. */
+  /** Per side, driving through the middle of the door opening with mirrors out. */
   doorwayLeft: Mm
   doorwayRight: Mm
   doorwayTop: Mm
@@ -108,8 +108,10 @@ export function checkFit(garage: Garage, car: ResolvedCar, park: Parking): Fit {
   const driverDoor = lateral(garage, body, { ...body, ...band }, 'left')
   const passengerDoor = lateral(garage, body, { ...body, ...band }, 'right')
 
-  const doorwayLeft = mirrors.x0 - garage.doorOffset
-  const doorwayRight = garage.doorOffset + garage.doorWidth - mirrors.x1
+  // You drive through the middle of the door and straighten up inside, so the
+  // doorway check is the car centred in the opening, not on its parked line.
+  const doorwayLeft = (garage.doorWidth - car.widthMirrors) / 2
+  const doorwayRight = doorwayLeft
   const doorwayTop = garage.doorHeight - car.height
 
   const fits = Math.min(left.value, right.value, front.value, rear.value, doorwayLeft, doorwayRight, doorwayTop) >= 0

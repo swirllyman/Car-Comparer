@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { feet, inches } from '../geometry/units'
+import { inches } from '../geometry/units'
 import { CARS, DEFAULT_CANDIDATE_ID, DEFAULT_CURRENT_ID } from './cars'
 import type { Anchor, CarSpec, Garage, Units, View } from './types'
 
@@ -20,17 +20,21 @@ export interface AppState {
   recentIds: string[]
 }
 
-/** A plain single-car garage with the current car parked in the middle. */
-export function sampleGarage(): Garage {
+/**
+ * Our garage, measured, so anyone opening the shared link starts from it.
+ * Each device can still change it under "Edit garage".
+ */
+export function defaultGarage(): Garage {
   return {
-    width: feet(12),
-    depth: feet(22),
-    doorWidth: feet(9),
-    doorHeight: feet(7),
-    doorOffset: feet(1.5),
+    width: inches(125),
+    depth: inches(195),
+    doorWidth: inches(95),
+    doorHeight: inches(85),
+    doorOffset: inches(18),
     parkedLeftGap: inches(35.5),
     parkedFrontGap: inches(24),
     obstacles: [],
+    charger: { wall: 'right', along: inches(75), cable: inches(288) },
   }
 }
 
@@ -41,8 +45,8 @@ export function freshState(): AppState {
     anchor: 'rear',
     currentId: DEFAULT_CURRENT_ID,
     candidateId: DEFAULT_CANDIDATE_ID,
-    garage: sampleGarage(),
-    garageIsMine: false,
+    garage: defaultGarage(),
+    garageIsMine: true,
     customCars: [],
     recentIds: [],
   }
@@ -52,7 +56,13 @@ function load(): AppState {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return freshState()
-    return { ...freshState(), ...(JSON.parse(raw) as Partial<AppState>) }
+    const saved = JSON.parse(raw) as Partial<AppState>
+    // A garage nobody ever saved is the old sample; replace it with ours.
+    if (!saved.garageIsMine) {
+      delete saved.garage
+      delete saved.garageIsMine
+    }
+    return { ...freshState(), ...saved }
   } catch {
     // Unreadable storage should never stop the app; start from defaults.
     return freshState()

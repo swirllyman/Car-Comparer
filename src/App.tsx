@@ -245,7 +245,7 @@ export default function App() {
 
         {view === 'garage' && !state.garageIsMine && (
           <button className="stage__notice" onClick={editGarage}>
-            Sample 12 × 22 ft garage · <strong>set up yours</strong>
+            Sample garage · <strong>set up yours</strong>
           </button>
         )}
       </main>
