@@ -97,6 +97,7 @@ export default function App() {
         <GarageSetup
           garage={garage}
           carWidth={current.widthBody}
+          carLength={current.length}
           units={units}
           onCancel={() => setEditing(null)}
           onSave={(g) => {
@@ -184,7 +185,7 @@ export default function App() {
                 className="iconbtn iconbtn--small"
                 aria-label="Centre it"
                 title="Centre it"
-                onClick={() => setCandidatePark({ ...candPark, centerX: garage.width / 2 })}
+                onClick={() => setCandidatePark({ ...candPark, centerX: garage.width / 2, topY: (garage.depth - candidate.length) / 2 })}
               >
                 <CentreIcon />
               </button>

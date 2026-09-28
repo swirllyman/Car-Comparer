@@ -44,10 +44,11 @@ export function LengthInput({ label, value, units, onChange, hint, optional }: {
   )
 }
 
-export function GarageSetup({ garage, carWidth, units, onSave, onCancel }: {
+export function GarageSetup({ garage, carWidth, carLength, units, onSave, onCancel }: {
   garage: Garage
-  /** Body width of the current car, for "centre it". */
+  /** Size of the current car, for "centre it". */
   carWidth: Mm
+  carLength: Mm
   units: Units
   onSave: (g: Garage) => void
   onCancel: () => void
@@ -90,9 +91,9 @@ export function GarageSetup({ garage, carWidth, units, onSave, onCancel }: {
           <button
             type="button"
             className="btn btn--quiet"
-            onClick={() => set({ parkedLeftGap: Math.max(0, (g.width - carWidth) / 2) })}
+            onClick={() => set({ parkedLeftGap: Math.max(0, (g.width - carWidth) / 2), parkedFrontGap: Math.max(0, (g.depth - carLength) / 2) })}
           >
-            Centre it between the walls
+            Centre it in the garage
           </button>
         </div>
         {L('parkedLeftGap', 'Left wall to car body', 'Standing inside, facing the back wall; to the body, not the mirror')}
