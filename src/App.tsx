@@ -1,34 +1,40 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useState, type ReactNode } from 'react'
 import { CarPicker } from './components/CarPicker'
 import { CompareView } from './components/CompareView'
 import { CarEditor, GarageSetup } from './components/forms'
 import { FitPanel, GarageView } from './components/GarageView'
+import { CentreIcon, CubeIcon, EyeIcon, FrontIcon, GarageIcon, InfoIcon, ResetIcon, SideIcon, SwapIcon, TopIcon } from './components/icons'
+import { useSize } from './components/useSize'
 import { CARS } from './data/cars'
 import { isElectric } from './data/search'
 import { allCars, findCar, useAppState } from './data/store'
-import type { Anchor, CarSpec, Garage, ResolvedCar, Units, View } from './data/types'
+import type { Anchor, CarSpec, ResolvedCar, Units, View } from './data/types'
 import { checkCable, portLabel } from './geometry/charge'
-import { compareCars } from './geometry/compare'
-import { checkFit, currentParking, type Parking } from './geometry/fit'
+import { compareCars, type Comparison } from './geometry/compare'
+import { checkFit, clearanceLevel, currentParking, DOOR_COMFORT, type Parking } from './geometry/fit'
 import { carFullName, resolveCar } from './geometry/resolve'
 import { formatDelta, formatLength, inches } from './geometry/units'
 
 const Scene3D = lazy(() => import('./scene/Scene3D'))
 
-const VIEWS: { id: View; label: string }[] = [
-  { id: 'top', label: 'Top' },
-  { id: 'side', label: 'Side' },
-  { id: 'front', label: 'Front' },
-  { id: '3d', label: '3D' },
-  { id: 'garage', label: 'Garage' },
-  { id: 'stats', label: 'Stats' },
+type Tab = Exclude<View, 'stats'>
+
+const TABS: { id: Tab; label: string; icon: ReactNode }[] = [
+  { id: 'top', label: 'Top', icon: <TopIcon /> },
+  { id: 'side', label: 'Side', icon: <SideIcon /> },
+  { id: 'front', label: 'Front', icon: <FrontIcon /> },
+  { id: '3d', label: '3D', icon: <CubeIcon /> },
+  { id: 'garage', label: 'Garage', icon: <GarageIcon /> },
 ]
 
 const ANCHORS: { id: Anchor; label: string }[] = [
-  { id: 'rear', label: 'Rear bumpers' },
-  { id: 'front', label: 'Front bumpers' },
-  { id: 'center', label: 'Centres' },
+  { id: 'rear', label: 'Rear' },
+  { id: 'front', label: 'Front' },
+  { id: 'center', label: 'Centre' },
 ]
+
+const UNIT_CYCLE: Units[] = ['in', 'ftin', 'cm']
+const UNIT_LABEL: Record<Units, string> = { in: 'in', ftin: 'ft·in', cm: 'cm' }
 
 type Editing = { kind: 'garage' } | { kind: 'car'; which: 'currentId' | 'candidateId'; car: CarSpec } | null
 
@@ -63,9 +69,13 @@ const NEW_CAR = (): CarSpec => ({
 export default function App() {
   const [state, update] = useAppState()
   const [editing, setEditing] = useState<Editing>(null)
+  const [details, setDetails] = useState(false)
   const [candidatePark, setCandidatePark] = useState<Parking | null>(null)
   const [showCurrentInGarage, setShowCurrentInGarage] = useState(true)
-  const { units, view, anchor, garage } = state
+  const [stageRef, box] = useSize<HTMLDivElement>()
+  const { units, anchor, garage } = state
+  // "stats" was a tab in earlier versions; it now lives in the details sheet.
+  const view: Tab = state.view === 'stats' ? 'top' : state.view
 
   const cars = allCars(state.customCars)
   const current = resolveCar(findCar(state.customCars, state.currentId))
@@ -83,7 +93,7 @@ export default function App() {
 
   if (editing?.kind === 'garage') {
     return (
-      <main className="app">
+      <div className="page">
         <GarageSetup
           garage={garage}
           units={units}
@@ -94,13 +104,13 @@ export default function App() {
             setEditing(null)
           }}
         />
-      </main>
+      </div>
     )
   }
   if (editing?.kind === 'car') {
     const builtIn = CARS.some((c) => c.id === editing.car.id)
     return (
-      <main className="app">
+      <div className="page">
         <CarEditor
           car={editing.car}
           units={units}
@@ -112,7 +122,7 @@ export default function App() {
             setEditing(null)
           }}
         />
-      </main>
+      </div>
     )
   }
 
@@ -121,9 +131,10 @@ export default function App() {
     setCandidatePark(null)
   }
 
-  const picker = (which: 'currentId' | 'candidateId', label: string) => (
+  const picker = (which: 'currentId' | 'candidateId', label: string, tone: 'current' | 'candidate') => (
     <CarPicker
       label={label}
+      tone={tone}
       selected={findCar(state.customCars, state[which])}
       cars={cars}
       recentIds={state.recentIds}
@@ -138,88 +149,263 @@ export default function App() {
     />
   )
 
-  return (
-    <main className="app">
-      <header className="top">
-        <h1>Car Comparer</h1>
-        <select value={units} onChange={(e) => update({ units: e.target.value as Units })} aria-label="Units">
-          <option value="in">inches</option>
-          <option value="ftin">feet + inches</option>
-          <option value="cm">centimetres</option>
-        </select>
-      </header>
+  const fit = checkFit(garage, candidate, candPark)
+  const currentFit = checkFit(garage, current, curPark)
+  const cable = checkCable(garage, candidate, candPark)
+  const currentCable = checkCable(garage, current, curPark)
+  const editGarage = () => setEditing({ kind: 'garage' })
 
-      <section className="pickers">
-        {picker('currentId', 'My car')}
+  return (
+    <div className="shell">
+      <header className="bar">
+        {picker('currentId', 'My car', 'current')}
         <button
-          className="btn btn--quiet swap"
-          title="Swap"
+          className="iconbtn"
+          aria-label="Swap cars"
           onClick={() => update({ currentId: state.candidateId, candidateId: state.currentId })}
         >
-          ⇄
+          <SwapIcon />
         </button>
-        {picker('candidateId', 'Compare with')}
-      </section>
+        {picker('candidateId', 'Compare', 'candidate')}
+      </header>
 
-      <nav className="tabs" role="tablist">
-        {VIEWS.map((v) => (
-          <button key={v.id} role="tab" aria-selected={view === v.id} className="tab" onClick={() => update({ view: v.id })}>
-            {v.label}
+      <main className="stage" ref={stageRef}>
+        <div className="stage__tools stage__tools--left">
+          {view === 'garage' ? (
+            <>
+              <button className="pill" onClick={editGarage}>
+                Edit garage
+              </button>
+              <button className="iconbtn iconbtn--small" aria-label="Same spot as my car" title="Same spot as my car" onClick={() => setCandidatePark(null)}>
+                <ResetIcon />
+              </button>
+              <button
+                className="iconbtn iconbtn--small"
+                aria-label="Centre it"
+                title="Centre it"
+                onClick={() => setCandidatePark({ centerX: garage.width / 2, frontY: candPark.frontY })}
+              >
+                <CentreIcon />
+              </button>
+              <button
+                className="iconbtn iconbtn--small"
+                aria-label={showCurrentInGarage ? 'Hide my car' : 'Show my car'}
+                aria-pressed={showCurrentInGarage}
+                title="Show my car"
+                onClick={() => setShowCurrentInGarage(!showCurrentInGarage)}
+              >
+                <EyeIcon off={!showCurrentInGarage} />
+              </button>
+            </>
+          ) : view !== 'front' ? (
+            <div className="seg" role="group" aria-label="Line up by">
+              <span className="seg__label">Line up</span>
+              {ANCHORS.map((a) => (
+                <button key={a.id} aria-pressed={anchor === a.id} onClick={() => update({ anchor: a.id })}>
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="stage__tools stage__tools--right">
+          <button
+            className="pill"
+            aria-label="Change units"
+            onClick={() => update({ units: UNIT_CYCLE[(UNIT_CYCLE.indexOf(units) + 1) % UNIT_CYCLE.length] })}
+          >
+            {UNIT_LABEL[units]}
+          </button>
+          <button className="iconbtn iconbtn--small" aria-label="Details" onClick={() => setDetails(true)}>
+            <InfoIcon />
+          </button>
+        </div>
+
+        <div className={`stage__drawing${view === 'garage' && !state.garageIsMine ? ' stage__drawing--notice' : ''}`}>
+          {view === 'garage' ? (
+            <GarageView
+              garage={garage}
+              current={current}
+              candidate={candidate}
+              currentPark={curPark}
+              candidatePark={candPark}
+              onMove={setCandidatePark}
+              showCurrent={showCurrentInGarage}
+              units={units}
+              box={box}
+            />
+          ) : view === '3d' ? (
+            <Suspense fallback={<p className="muted center">Loading 3D…</p>}>
+              <Scene3D current={current} candidate={candidate} candidateX={cmp.candidate.frontY} />
+            </Suspense>
+          ) : (
+            <CompareView current={current} candidate={candidate} cmp={cmp} view={view} units={units} box={box} />
+          )}
+        </div>
+
+        {view === 'garage' && !state.garageIsMine && (
+          <button className="stage__notice" onClick={editGarage}>
+            Sample 12 × 22 ft garage · <strong>set up yours</strong>
+          </button>
+        )}
+      </main>
+
+      {view === 'garage' ? (
+        <GarageStrip
+          fit={fit}
+          currentFit={currentFit}
+          cable={cable}
+          isEv={isElectric(candidate)}
+          hasCharger={!!garage.charger}
+          units={units}
+          onOpen={() => setDetails(true)}
+        />
+      ) : (
+        <CompareStrip cmp={cmp} current={current} candidate={candidate} units={units} onOpen={() => setDetails(true)} />
+      )}
+
+      <nav className="tabbar" role="tablist">
+        {TABS.map((t) => (
+          <button key={t.id} role="tab" aria-selected={view === t.id} className="tabbar__tab" onClick={() => update({ view: t.id })}>
+            {t.icon}
+            <span>{t.label}</span>
           </button>
         ))}
       </nav>
 
-      {(view === 'top' || view === 'side' || view === '3d') && (
-        <div className="segmented" aria-label="Line up by">
-          <span className="muted">Line up:</span>
-          {ANCHORS.map((a) => (
-            <button key={a.id} aria-pressed={anchor === a.id} onClick={() => update({ anchor: a.id })}>
-              {a.label}
-            </button>
-          ))}
-        </div>
+      {details && (
+        <Sheet title={view === 'garage' ? 'Garage fit' : 'Size comparison'} onClose={() => setDetails(false)}>
+          {view === 'garage' ? (
+            <>
+              <FitPanel
+                fit={fit}
+                currentFit={currentFit}
+                cable={cable}
+                currentCable={currentCable}
+                isEv={isElectric(candidate)}
+                hasCharger={!!garage.charger}
+                onAddCharger={() => {
+                  setDetails(false)
+                  editGarage()
+                }}
+                units={units}
+              />
+              <p className="muted small">Drag the orange car in the garage to try other spots.</p>
+            </>
+          ) : (
+            <StatsTable current={current} candidate={candidate} units={units} />
+          )}
+          <Notes cars={[current, candidate]} />
+        </Sheet>
       )}
-
-      {view === 'garage' ? (
-        <GarageTab
-          {...{ current, candidate, units, curPark, candPark, showCurrentInGarage }}
-          garage={garage}
-          garageIsMine={state.garageIsMine}
-          onMove={setCandidatePark}
-          onReset={() => setCandidatePark(null)}
-          onCenter={() => setCandidatePark({ centerX: garage.width / 2, frontY: candPark.frontY })}
-          onToggleCurrent={setShowCurrentInGarage}
-          onEditGarage={() => setEditing({ kind: 'garage' })}
-        />
-      ) : view === 'stats' ? (
-        <StatsTable current={current} candidate={candidate} units={units} />
-      ) : (
-        <>
-          <div className="stage">
-            {view === '3d' ? (
-              <Suspense fallback={<p className="muted center">Loading 3D…</p>}>
-                <Scene3D current={current} candidate={candidate} candidateX={cmp.candidate.frontY} />
-              </Suspense>
-            ) : (
-              <CompareView current={current} candidate={candidate} cmp={cmp} view={view} units={units} />
-            )}
-          </div>
-          <Legend current={current} candidate={candidate} />
-          <DimTable current={current} candidate={candidate} units={units} />
-        </>
-      )}
-
-      <Notes cars={[current, candidate]} />
-    </main>
+    </div>
   )
 }
 
-function Legend({ current, candidate }: { current: ResolvedCar; candidate: ResolvedCar }) {
+/** A bottom sheet over the app; its content scrolls on its own if it must. */
+function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <p className="legend">
-      <span className="swatch swatch--current" /> {carFullName(current)}
-      <span className="swatch swatch--candidate" /> {carFullName(candidate)}
-    </p>
+    <div className="sheet-backdrop sheet-backdrop--bottom" onClick={onClose}>
+      <div className="bottomsheet" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+        <div className="bottomsheet__head">
+          <h2>{title}</h2>
+          <button className="btn btn--quiet" onClick={onClose} autoFocus>
+            Done
+          </button>
+        </div>
+        <div className="bottomsheet__body">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+type Level = 'bigger' | 'smaller' | 'same' | 'bad' | 'tight' | 'ok'
+
+/** Tiles are tight on a phone: "15.2 in" → "15.2″". */
+const tight = (s: string) => s.replace(/(\d) in\b/g, '$1″')
+
+function Tile({ label, value, sub, level }: { label: string; value: string; sub?: string; level: Level }) {
+  value = tight(value)
+  sub = sub && tight(sub)
+  return (
+    <div className="tile">
+      <span className="tile__label">{label}</span>
+      <span className={`tile__value tile__value--${level}`}>{value}</span>
+      {sub && <span className="tile__sub">{sub}</span>}
+    </div>
+  )
+}
+
+const deltaLevel = (mm: number): Level => (Math.abs(mm) < 0.5 ? 'same' : mm > 0 ? 'bigger' : 'smaller')
+
+/** The key size differences at a glance; tap for the full table. */
+function CompareStrip({ cmp, current, candidate, units, onOpen }: {
+  cmp: Comparison
+  current: ResolvedCar
+  candidate: ResolvedCar
+  units: Units
+  onOpen: () => void
+}) {
+  const L = (mm: number) => formatLength(mm, units)
+  const D = (mm: number) => formatDelta(mm, units)
+  const ports = candidate.chargePorts?.length ? candidate.chargePorts.map(portLabel).join(' + ') : null
+  return (
+    <button className="strip" onClick={onOpen} aria-label="Show full comparison">
+      <div className="strip__tiles">
+        <Tile label="Length" value={D(cmp.length)} sub={L(candidate.length)} level={deltaLevel(cmp.length)} />
+        <Tile label="Width" value={D(cmp.width)} sub={`${D(cmp.side)} a side`} level={deltaLevel(cmp.width)} />
+        <Tile
+          label="Mirrors"
+          value={D(cmp.widthMirrors)}
+          sub={candidate.estimated.includes('widthMirrors') || current.estimated.includes('widthMirrors') ? 'estimated' : L(candidate.widthMirrors)}
+          level={deltaLevel(cmp.widthMirrors)}
+        />
+        <Tile label="Height" value={D(cmp.height)} sub={L(candidate.height)} level={deltaLevel(cmp.height)} />
+      </div>
+      <span className="strip__more">
+        {ports ? `⚡ ${ports}${candidate.portConfirmed === false ? ' (unconfirmed)' : ''} · ` : ''}All details ›
+      </span>
+    </button>
+  )
+}
+
+/** Fit verdict and the tightest clearances; tap for everything. */
+function GarageStrip({ fit, currentFit, cable, isEv, hasCharger, units, onOpen }: {
+  fit: ReturnType<typeof checkFit>
+  currentFit: ReturnType<typeof checkFit>
+  cable: ReturnType<typeof checkCable>
+  isEv: boolean
+  hasCharger: boolean
+  units: Units
+  onOpen: () => void
+}) {
+  const L = (mm: number) => formatLength(mm, units)
+  const vs = (a: number, b: number) => (Math.abs(a - b) < 0.5 ? 'same as now' : `${formatDelta(a - b, units)} vs now`)
+  const door = Math.min(fit.driverDoor.value, fit.passengerDoor.value)
+  const doorNow = Math.min(currentFit.driverDoor.value, currentFit.passengerDoor.value)
+  return (
+    <button className="strip" onClick={onOpen} aria-label="Show full garage fit">
+      <p className={`strip__verdict strip__verdict--${fit.fits ? 'ok' : 'bad'}`}>
+        {fit.fits ? '✓ Fits, and the door closes' : '✕ Doesn’t fit where it’s parked'}
+      </p>
+      <div className="strip__tiles strip__tiles--3">
+        <Tile label="Left" value={L(fit.left.value)} sub={vs(fit.left.value, currentFit.left.value)} level={clearanceLevel(fit.left.value)} />
+        <Tile label="Right" value={L(fit.right.value)} sub={vs(fit.right.value, currentFit.right.value)} level={clearanceLevel(fit.right.value)} />
+        <Tile label="Behind" value={L(fit.rear.value)} sub={vs(fit.rear.value, currentFit.rear.value)} level={clearanceLevel(fit.rear.value)} />
+        <Tile label="In front" value={L(fit.front.value)} sub={vs(fit.front.value, currentFit.front.value)} level={clearanceLevel(fit.front.value)} />
+        <Tile label="Door room" value={L(door)} sub={vs(door, doorNow)} level={clearanceLevel(door, DOOR_COMFORT)} />
+        {isEv ? (
+          <Tile
+            label="Cable"
+            value={!hasCharger ? 'No charger' : cable ? `${formatLength(cable.needed, units === 'cm' ? 'cm' : 'ftin')}` : 'Port ?'}
+            sub={!hasCharger ? 'add in Edit garage' : cable ? `of ${formatLength(cable.cable, units === 'cm' ? 'cm' : 'ftin')}` : 'location unknown'}
+            level={!cable ? 'same' : cable.needed > cable.cable ? 'bad' : cable.cable - cable.needed < inches(24) ? 'tight' : 'ok'}
+          />
+        ) : (
+          <Tile label="Door height" value={L(fit.doorwayTop)} sub="above roof" level={clearanceLevel(fit.doorwayTop)} />
+        )}
+      </div>
+    </button>
   )
 }
 
@@ -305,78 +491,6 @@ function StatsTable({ current, candidate, units }: { current: ResolvedCar; candi
           </tbody>
         </table>
       )}
-      <p className="muted small">More stats (power, economy, cargo, price) will fill in as the car data grows.</p>
-    </>
-  )
-}
-
-function GarageTab(p: {
-  garage: Garage
-  garageIsMine: boolean
-  current: ResolvedCar
-  candidate: ResolvedCar
-  units: Units
-  curPark: Parking
-  candPark: Parking
-  showCurrentInGarage: boolean
-  onMove: (p: Parking) => void
-  onReset: () => void
-  onCenter: () => void
-  onToggleCurrent: (v: boolean) => void
-  onEditGarage: () => void
-}) {
-  const fit = checkFit(p.garage, p.candidate, p.candPark)
-  const currentFit = checkFit(p.garage, p.current, p.curPark)
-  return (
-    <>
-      {!p.garageIsMine && (
-        <p className="banner">
-          This is a sample 12 × 22 ft garage.{' '}
-          <button className="link" onClick={p.onEditGarage}>
-            Enter your garage’s measurements
-          </button>{' '}
-          to get real answers.
-        </p>
-      )}
-      <div className="toolbar">
-        <button className="btn" onClick={p.onEditGarage}>
-          Edit garage
-        </button>
-        <button className="btn btn--quiet" onClick={p.onReset}>
-          Same spot as my car
-        </button>
-        <button className="btn btn--quiet" onClick={p.onCenter}>
-          Centre it
-        </button>
-        <label className="check">
-          <input type="checkbox" checked={p.showCurrentInGarage} onChange={(e) => p.onToggleCurrent(e.target.checked)} /> Show my car
-        </label>
-      </div>
-      <div className="garage-layout">
-        <div className="stage stage--garage">
-          <GarageView
-            garage={p.garage}
-            current={p.current}
-            candidate={p.candidate}
-            currentPark={p.curPark}
-            candidatePark={p.candPark}
-            onMove={p.onMove}
-            showCurrent={p.showCurrentInGarage}
-            units={p.units}
-          />
-          <p className="muted small center">Drag the orange car to re-park it.</p>
-        </div>
-        <FitPanel
-          fit={fit}
-          currentFit={currentFit}
-          cable={checkCable(p.garage, p.candidate, p.candPark)}
-          currentCable={checkCable(p.garage, p.current, p.curPark)}
-          isEv={isElectric(p.candidate)}
-          hasCharger={!!p.garage.charger}
-          onAddCharger={p.onEditGarage}
-          units={p.units}
-        />
-      </div>
     </>
   )
 }

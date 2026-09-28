@@ -87,6 +87,7 @@ export function DimLine({
   a,
   b,
   label,
+  sub,
   fs,
   tone = 'neutral',
   labelAt = 1.2,
@@ -95,6 +96,8 @@ export function DimLine({
   a: Pt
   b: Pt
   label: string
+  /** A small word above the value, e.g. "front". */
+  sub?: string
   fs: number
   tone?: Tone
   labelAt?: number
@@ -111,18 +114,33 @@ export function DimLine({
       <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} />
       <line x1={a[0] - nx * t} y1={a[1] - ny * t} x2={a[0] + nx * t} y2={a[1] + ny * t} />
       <line x1={b[0] - nx * t} y1={b[1] - ny * t} x2={b[0] + nx * t} y2={b[1] + ny * t} />
-      <text x={mx} y={my} fontSize={fs} textAnchor={anchor} dominantBaseline="middle">
-        {label}
-      </text>
+      <Label x={mx} y={my} fs={fs} anchor={anchor} label={label} sub={sub} />
     </g>
   )
 }
 
+/** A value with an optional small caption stacked above it. */
+function Label({ x, y, fs, anchor, label, sub }: { x: number; y: number; fs: number; anchor: 'start' | 'middle' | 'end'; label: string; sub?: string }) {
+  return (
+    <>
+      {sub && (
+        <text x={x} y={y - fs * 0.95} fontSize={fs * 0.72} textAnchor={anchor} dominantBaseline="middle" className="dim__sub">
+          {sub}
+        </text>
+      )}
+      <text x={x} y={y} fontSize={fs} textAnchor={anchor} dominantBaseline="middle">
+        {label}
+      </text>
+    </>
+  )
+}
+
 /** A label with a short leader line to the point it describes. */
-export function Callout({ at, to, label, fs, tone = 'neutral', anchor = 'start' }: {
+export function Callout({ at, to, label, sub, fs, tone = 'neutral', anchor = 'start' }: {
   at: Pt
   to: Pt
   label: string
+  sub?: string
   fs: number
   tone?: Tone
   anchor?: 'start' | 'middle' | 'end'
@@ -131,9 +149,7 @@ export function Callout({ at, to, label, fs, tone = 'neutral', anchor = 'start' 
     <g className={`dim dim--${tone}`}>
       <line x1={to[0]} y1={to[1]} x2={at[0]} y2={at[1]} className="dim__leader" />
       <circle cx={to[0]} cy={to[1]} r={fs * 0.15} />
-      <text x={at[0] + (anchor === 'start' ? fs * 0.3 : anchor === 'end' ? -fs * 0.3 : 0)} y={at[1]} fontSize={fs} textAnchor={anchor} dominantBaseline="middle">
-        {label}
-      </text>
+      <Label x={at[0] + (anchor === 'start' ? fs * 0.3 : anchor === 'end' ? -fs * 0.3 : 0)} y={at[1]} fs={fs} anchor={anchor} label={label} sub={sub} />
     </g>
   )
 }

@@ -5,6 +5,7 @@ import { checkCable, chargerPoint, portLabel, type CableCheck } from '../geometr
 import { MIRROR_DEPTH, mirrorY } from '../geometry/shapes'
 import { formatDelta, formatLength, inches } from '../geometry/units'
 import { CarTop, DimLine } from './draw'
+import { fontFor, type Box } from './useSize'
 
 interface Props {
   garage: Garage
@@ -15,18 +16,19 @@ interface Props {
   onMove: (p: Parking) => void
   showCurrent: boolean
   units: Units
+  box: Box
 }
 
 const WALL = 150
 
 /** Top-down garage, back wall at the top, door at the bottom; drag the candidate to re-park it. */
-export function GarageView({ garage, current, candidate, currentPark, candidatePark, onMove, showCurrent, units }: Props) {
+export function GarageView({ garage, current, candidate, currentPark, candidatePark, onMove, showCurrent, units, box }: Props) {
   const svg = useRef<SVGSVGElement>(null)
   const drag = useRef<{ dx: number; dy: number } | null>(null)
   const fit = checkFit(garage, candidate, candidatePark)
   const charger = chargerPoint(garage)
   const cable = checkCable(garage, candidate, candidatePark)
-  const fs = Math.max(garage.width, garage.depth) * 0.028
+  const fs = fontFor(garage.width + 2 * WALL, 1, garage.depth + 2 * WALL, 3, box, 12)
 
   const toMm = (e: PointerEvent) => {
     const m = svg.current!.getScreenCTM()!.inverse()
@@ -61,13 +63,13 @@ export function GarageView({ garage, current, candidate, currentPark, candidateP
   const ly = atMirror(fit.left) ? mY : midY
   const ry = atMirror(fit.right) ? mY : midY
   const f = (c: Clearance) => formatLength(c.value, units)
-  const pad = fs * 2
+  const pad = fs * 0.5
 
   return (
     <svg
       ref={svg}
       className="drawing drawing--garage"
-      viewBox={`${-WALL - pad} ${-WALL - pad} ${garage.width + 2 * (WALL + pad)} ${garage.depth + 2 * WALL + pad * 2.5}`}
+      viewBox={`${-WALL - pad} ${-WALL - pad} ${garage.width + 2 * (WALL + pad)} ${garage.depth + 2 * WALL + fs * 3}`}
     >
       <rect x={0} y={0} width={garage.width} height={garage.depth} className="garage__floor" />
       {/* Walls, with the door opening cut out of the bottom one. */}

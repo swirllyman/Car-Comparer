@@ -1,6 +1,6 @@
 import { Edges, OrbitControls } from '@react-three/drei'
-import { Canvas } from '@react-three/fiber'
-import { useMemo } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { ResolvedCar } from '../data/types'
 import { beltHeight, clipY, MIRROR_DEPTH, mirrorY, sideProfile, topMirrors, wheelRadius, type Pt } from '../geometry/shapes'
@@ -93,11 +93,36 @@ function Car3D({ car, x, ghost }: { car: ResolvedCar; x: number; ghost?: boolean
   )
 }
 
+/** Viewing direction: from the front-left quarter, a little above. */
+const VIEW_DIR = new THREE.Vector3(-0.9, 0.55, 0.95).normalize()
+
+/**
+ * Back the camera off until the whole pair fits the canvas, on any screen
+ * shape: a tall phone needs to stand much further away than a wide monitor.
+ */
+function FrameCars({ span, mid }: { span: number; mid: number }) {
+  const { camera, size } = useThree()
+  useEffect(() => {
+    const cam = camera as THREE.PerspectiveCamera
+    const vfov = THREE.MathUtils.degToRad(cam.fov)
+    const hfov = 2 * Math.atan(Math.tan(vfov / 2) * (size.width / size.height))
+    // Fit a sphere around the cars (half the span, plus a margin).
+    const radius = span * 0.6
+    const dist = radius / Math.sin(Math.min(vfov, hfov) / 2)
+    cam.position.set(mid + VIEW_DIR.x * dist, 0.7 + VIEW_DIR.y * dist, VIEW_DIR.z * dist)
+    cam.lookAt(mid, 0.7, 0)
+    cam.updateProjectionMatrix()
+  }, [camera, size.width, size.height, span, mid])
+  return null
+}
+
 export default function Scene3D({ current, candidate, candidateX }: { current: ResolvedCar; candidate: ResolvedCar; candidateX: number }) {
-  const len = Math.max(current.length, candidate.length) * M
-  const mid = (Math.min(0, candidateX) * M + Math.max(current.length, candidateX + candidate.length) * M) / 2
+  const x0 = Math.min(0, candidateX) * M
+  const x1 = Math.max(current.length, candidateX + candidate.length) * M
+  const mid = (x0 + x1) / 2
   return (
-    <Canvas className="scene3d" camera={{ position: [mid - len * 0.9, len * 0.55, len * 0.95], fov: 35 }} dpr={[1, 2]}>
+    <Canvas className="scene3d" camera={{ fov: 35 }} dpr={[1, 2]}>
+      <FrameCars span={x1 - x0} mid={mid} />
       <color attach="background" args={['#eef1f5']} />
       <hemisphereLight args={['#ffffff', '#b8c0cc', 1.4]} />
       <directionalLight position={[-3, 6, 4]} intensity={1.6} />

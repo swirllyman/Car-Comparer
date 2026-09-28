@@ -22,6 +22,12 @@ npm run build
 
 ## What's here (Phase 1 + early Phase 2)
 
+The app is laid out like a phone app: one screen with no page scroll. The
+two cars sit at the top, the drawing fills the middle, a strip of key numbers
+sits below it (tap for the full table), and a tab bar runs along the bottom.
+Drawings size their labels to the screen.
+
+
 - **Top / Side / Front** overlays, drawn in millimetres with a flat
   (orthographic) projection, with signed differences on every side. Line the
   cars up by rear bumpers, front bumpers or centres.

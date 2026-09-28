@@ -4,6 +4,7 @@ import type { CarSpec, ResolvedCar, Units } from '../data/types'
 import { portLabel } from '../geometry/charge'
 import { carFullName, resolveCar } from '../geometry/resolve'
 import { formatLength } from '../geometry/units'
+import { EditIcon } from './icons'
 
 const KINDS: { id: Kind; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -16,6 +17,7 @@ const KINDS: { id: Kind; label: string }[] = [
 
 interface Props {
   label: string
+  tone: 'current' | 'candidate'
   selected: CarSpec
   cars: CarSpec[]
   recentIds: string[]
@@ -30,21 +32,24 @@ interface Props {
   onAdd: (query: string) => void
 }
 
-/** A button naming the chosen car that opens a search-as-you-type list. */
+/** A compact chip naming the chosen car; tapping it opens a search-as-you-type list. */
 export function CarPicker(p: Props) {
   const [open, setOpen] = useState(false)
+  const c = p.selected
   return (
-    <div className="picker">
-      <span className="picker__label">{p.label}</span>
-      <div className="picker__row">
-        <button className="picker__button" onClick={() => setOpen(true)} aria-haspopup="dialog">
-          <span className="picker__name">{carFullName(p.selected)}</span>
-          <span aria-hidden>🔍</span>
-        </button>
-        <button className="btn btn--quiet" title="Edit dimensions" onClick={p.onEdit}>
-          Edit
-        </button>
-      </div>
+    <>
+      <button className={`carchip carchip--${p.tone}`} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label={`${p.label}: ${carFullName(c)}. Change`}>
+        <span className="carchip__label">
+          <span className={`swatch swatch--${p.tone}`} /> {p.label}
+        </span>
+        <span className="carchip__name">
+          {c.make} {c.model}
+        </span>
+        <span className="carchip__trim">
+          {c.year}
+          {c.trim ? ` · ${c.trim}` : ''}
+        </span>
+      </button>
       {open && (
         <SearchSheet
           {...p}
@@ -53,13 +58,17 @@ export function CarPicker(p: Props) {
             setOpen(false)
             p.onSelect(id)
           }}
+          onEdit={() => {
+            setOpen(false)
+            p.onEdit()
+          }}
           onAdd={(q) => {
             setOpen(false)
             p.onAdd(q)
           }}
         />
       )}
-    </div>
+    </>
   )
 }
 
@@ -124,6 +133,12 @@ function SearchSheet(p: Props & { onClose: () => void }) {
             Close
           </button>
         </div>
+        <button className="search__edit" onClick={p.onEdit}>
+          <EditIcon />
+          <span>
+            Edit dimensions of <strong>{carFullName(p.selected)}</strong>
+          </span>
+        </button>
         <div className="search__filters">
           {KINDS.map((k) => (
             <button key={k.id} className="chip" aria-pressed={kind === k.id} onClick={() => {
